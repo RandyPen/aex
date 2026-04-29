@@ -1,0 +1,11 @@
+services:
+  agent:
+    build: .
+    env_file: .env
+    volumes:
+      - waap-session:/root/.waap-cli
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  waap-session:

@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.pid
+logs/
+.next/
+.vercel/
+dist/
