@@ -1,0 +1,12 @@
+[
+  {
+    "slug": "cetus",
+    "name": "Cetus Yield Agent Dashboard",
+    "agentSlug": "cetus-yield-agent",
+    "chain": "sui",
+    "protocol": "cetus",
+    "type": "lp",
+    "components": ["universal", "lp"],
+    "vercelUrl": "https://dashboard-three-psi-67.vercel.app"
+  }
+]
