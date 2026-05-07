@@ -1,0 +1,23 @@
+# CODEOWNERS for holonym-foundation/aex
+#
+# Lines later in the file take precedence. The last matching pattern wins.
+# Reviewers on these paths are auto-requested when a PR touches the path.
+
+# Default — repository maintainers
+*                                           @lebraat
+
+# Foundational governance — license, security, contribution policy
+/LICENSE                                    @lebraat
+/SECURITY.md                                @lebraat
+/CONTRIBUTING.md                            @lebraat
+/README.md                                  @lebraat
+/CODEOWNERS                                 @lebraat
+
+# CLI scaffolder source
+/packages/create-agent-wallet/              @lebraat
+
+# Maintainer skills (changes here affect contribution workflow)
+/.claude/skills/                            @lebraat
+
+# CI workflows
+/.github/workflows/                         @lebraat
