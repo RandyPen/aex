@@ -215,11 +215,34 @@ async function whoami(): Promise<Hex> {
   return parsed.evmWalletAddress as Hex
 }
 
-async function sendTx(to: Hex, data: Hex, label: string): Promise<string> {
+// Pre-flight simulation — runs an eth_call against the upstream to confirm the
+// tx wouldn't revert and to capture an accurate gas estimate. Returns the
+// estimated gas units; throws on simulated revert so the caller bails before
+// paying gas. Set AGENT_SIMULATE=0 to disable.
+const SIMULATE_ENABLED = process.env.AGENT_SIMULATE !== '0'
+
+async function simulateTx(from: Hex, to: Hex, data: Hex, label: string): Promise<bigint | null> {
+  if (!SIMULATE_ENABLED) return null
+  try {
+    const gas = await publicClient.estimateGas({ account: from, to, data, value: 0n })
+    log('info', 'tx_simulated', { label, to, gasEstimate: gas.toString() })
+    return gas
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    // Surface revert reason if the node returned one (viem includes it in the message)
+    log('error', 'tx_simulation_failed', { label, to, error: msg })
+    void sendMatrixAlert(`simulation failed for ${label}: ${msg.slice(0, 240)}`)
+    throw new Error(`simulation reverted for ${label}: ${msg}`)
+  }
+}
+
+async function sendTx(to: Hex, data: Hex, label: string, owner?: Hex): Promise<string> {
   if (DRY_RUN) {
     log('info', 'dry_run_skip', { label, to })
+    if (owner) await simulateTx(owner, to, data, `${label} (dry-run simulate)`).catch(() => null)
     return '0xdryrun'
   }
+  if (owner) await simulateTx(owner, to, data, label)
   const args = ['send-tx', '--to', to, '--value', '0', '--data', data, '--chain', `evm:${CHAIN_ID}`]
   if (RPC_URL) args.push('--rpc', RPC_URL)
   const { stdout } = await execa('waap-cli', args)
@@ -335,7 +358,7 @@ async function ensureApproval(spender: Hex, amount: bigint, owner: Hex): Promise
   if (current >= amount) return
 
   const data = encodeFunctionData({ abi, functionName: 'approve', args: [spender, amount] })
-  const txHash = await sendTx(ASSET!, data, `approve(${spender})`)
+  const txHash = await sendTx(ASSET!, data, `approve(${spender})`, owner)
   logEvent('approve', { spender, amount: amount.toString(), txHash })
 
   // Wait until the allowance is on-chain before continuing. Cap at 60s.
@@ -368,6 +391,7 @@ async function depositInto(vault: MorphoVault, owner: Hex, amount: bigint): Prom
     vault.address,
     data,
     `deposit ${formatUnits(amount, vault.asset.decimals)} → ${vault.symbol}`,
+    owner,
   )
   logEvent('vault_deposit', {
     vaultName: vault.name,
@@ -384,6 +408,7 @@ async function withdrawFrom(vault: MorphoVault, owner: Hex, amount: bigint): Pro
     vault.address,
     data,
     `withdraw ${formatUnits(amount, vault.asset.decimals)} ← ${vault.symbol}`,
+    owner,
   )
   logEvent('vault_redeem', {
     vaultName: vault.name,
@@ -424,7 +449,7 @@ async function aaveSupply(owner: Hex, amount: bigint, decimals: number, priceUsd
     functionName: 'supply',
     args: [ASSET!, amount, owner, 0],
   })
-  const txHash = await sendTx(AAVE_POOL as Hex, data, `aave supply ${formatUnits(amount, decimals)}`)
+  const txHash = await sendTx(AAVE_POOL as Hex, data, `aave supply ${formatUnits(amount, decimals)}`, owner)
   const usd = Number(formatUnits(amount, decimals)) * priceUsd
   logEvent('idle_fallback_supply', {
     pool: AAVE_POOL,
@@ -443,7 +468,7 @@ async function aaveWithdraw(owner: Hex, amount: bigint, decimals: number, priceU
     functionName: 'withdraw',
     args: [ASSET!, amount, owner],
   })
-  const txHash = await sendTx(AAVE_POOL as Hex, data, `aave withdraw ${formatUnits(amount, decimals)}`)
+  const txHash = await sendTx(AAVE_POOL as Hex, data, `aave withdraw ${formatUnits(amount, decimals)}`, owner)
   const usd = Number(formatUnits(amount, decimals)) * priceUsd
   logEvent('idle_fallback_withdraw', {
     pool: AAVE_POOL,
@@ -545,7 +570,7 @@ async function claimRewardsOnce(owner: Hex): Promise<void> {
       functionName: 'claim',
       args: [owner, c.reward, claimable, c.proof],
     })
-    const txHash = await sendTx(c.distributor, data, `claim ${c.symbol ?? c.reward}`)
+    const txHash = await sendTx(c.distributor, data, `claim ${c.symbol ?? c.reward}`, owner)
     const formatted = c.decimals != null ? formatUnits(claimable, c.decimals) : c.claimable
     logEvent('rewards_claimed', {
       distributor: c.distributor,
