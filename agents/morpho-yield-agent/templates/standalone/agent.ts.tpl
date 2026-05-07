@@ -57,21 +57,6 @@ const REWARDS_CLAIM_INTERVAL_MS = Math.max(
 )
 const REWARDS_MIN_CLAIM_WEI = BigInt(process.env.AGENT_REWARDS_MIN_CLAIM_WEI ?? '1')
 
-// Telegram approval gate (application-layer 2FA) — for any tx whose estimated
-// USD value exceeds AGENT_TX_LIMIT_USD, the agent posts an inline-keyboard
-// approval prompt to the configured Telegram chat and waits for a human
-// click before submitting via waap-cli. Below the threshold, txs are
-// auto-approved. NOT a key-layer 2FA — a compromised agent could bypass
-// this. Treat as a human-in-the-loop policy gate, not a custody primitive.
-const TG_BOT_TOKEN = process.env.TG_APPROVAL_BOT_TOKEN ?? ''
-const TG_CHAT_ID = process.env.TG_APPROVAL_CHAT_ID ?? ''
-const TG_APPROVAL_ENABLED = TG_BOT_TOKEN.length > 0 && TG_CHAT_ID.length > 0
-const TX_LIMIT_USD = Number(process.env.AGENT_TX_LIMIT_USD ?? 50)
-const APPROVAL_TIMEOUT_MS = Math.max(
-  30_000,
-  Number(process.env.AGENT_APPROVAL_TIMEOUT_MS ?? 5 * 60 * 1000),
-)
-
 // Optional explicit watched-vault allowlist. If unset, the agent queries the
 // Morpho API and considers every vault accepting AGENT_ASSET on this chain.
 const WATCHED_VAULTS = (process.env.WATCHED_VAULTS ?? '')
@@ -230,104 +215,6 @@ async function whoami(): Promise<Hex> {
   return parsed.evmWalletAddress as Hex
 }
 
-// -----------------------------------------------------------------------------
-// Telegram approval gate — for txs whose estimated USD value exceeds
-// AGENT_TX_LIMIT_USD, post an inline-keyboard prompt and wait for a human
-// click. Below the threshold, sendTx auto-approves. See block comment on
-// TG_APPROVAL_ENABLED for the threat-model caveat.
-// -----------------------------------------------------------------------------
-
-let tgUpdateOffset = 0
-
-async function tgApi<T>(method: string, body: Record<string, unknown>): Promise<T> {
-  const res = await request(`https://api.telegram.org/bot${TG_BOT_TOKEN}/${method}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  return (await res.body.json()) as T
-}
-
-interface TgSendResponse { ok: boolean; result?: { message_id: number } }
-interface TgCallbackQuery { id: string; data?: string; message?: { message_id: number } }
-interface TgUpdate { update_id: number; callback_query?: TgCallbackQuery }
-interface TgUpdatesResponse { ok: boolean; result?: TgUpdate[] }
-
-async function requestTgApproval(label: string, valueUsd: number, to: Hex): Promise<boolean> {
-  if (!TG_APPROVAL_ENABLED) return true
-  const text =
-    `[${AGENT_ID}] approval needed\n` +
-    `tx: ${label}\n` +
-    `value: $${valueUsd.toFixed(2)}\n` +
-    `to: ${to}\n` +
-    `chain: ${CHAIN_ID}\n` +
-    `expires in ${Math.round(APPROVAL_TIMEOUT_MS / 60_000)} min`
-  const callbackTag = `${AGENT_ID}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
-
-  let promptId: number | undefined
-  try {
-    const send = await tgApi<TgSendResponse>('sendMessage', {
-      chat_id: TG_CHAT_ID,
-      text,
-      reply_markup: {
-        inline_keyboard: [[
-          { text: 'Approve', callback_data: `approve:${callbackTag}` },
-          { text: 'Reject', callback_data: `reject:${callbackTag}` },
-        ]],
-      },
-    })
-    promptId = send.result?.message_id
-    if (!send.ok || !promptId) {
-      log('warn', 'tg_approval_send_failed', { label })
-      return false
-    }
-    logEvent('approval_requested', { label, valueUsd, to, callbackTag, promptId })
-  } catch (err) {
-    log('warn', 'tg_approval_send_error', { error: err instanceof Error ? err.message : String(err) })
-    return false
-  }
-
-  const deadline = Date.now() + APPROVAL_TIMEOUT_MS
-  while (Date.now() < deadline) {
-    try {
-      const updates = await tgApi<TgUpdatesResponse>('getUpdates', {
-        offset: tgUpdateOffset,
-        timeout: 10,
-        allowed_updates: ['callback_query'],
-      })
-      for (const u of updates.result ?? []) {
-        if (u.update_id >= tgUpdateOffset) tgUpdateOffset = u.update_id + 1
-        const cb = u.callback_query
-        if (!cb || !cb.data) continue
-        if (!cb.data.endsWith(`:${callbackTag}`)) continue
-        const decision = cb.data.startsWith('approve:') ? 'approved' : 'rejected'
-        await tgApi('answerCallbackQuery', { callback_query_id: cb.id, text: decision })
-        if (promptId) {
-          await tgApi('editMessageText', {
-            chat_id: TG_CHAT_ID,
-            message_id: promptId,
-            text: `${text}\n\n→ ${decision}`,
-          }).catch(() => null)
-        }
-        logEvent('approval_decision', { label, decision, callbackTag })
-        return decision === 'approved'
-      }
-    } catch (err) {
-      log('warn', 'tg_approval_poll_error', { error: err instanceof Error ? err.message : String(err) })
-      await new Promise((r) => setTimeout(r, 5000))
-    }
-  }
-  if (promptId) {
-    await tgApi('editMessageText', {
-      chat_id: TG_CHAT_ID,
-      message_id: promptId,
-      text: `${text}\n\n→ timed out (no response)`,
-    }).catch(() => null)
-  }
-  logEvent('approval_timeout', { label, callbackTag })
-  return false
-}
-
 // Pre-flight simulation — runs an eth_call against the upstream to confirm the
 // tx wouldn't revert and to capture an accurate gas estimate. Returns the
 // estimated gas units; throws on simulated revert so the caller bails before
@@ -349,22 +236,13 @@ async function simulateTx(from: Hex, to: Hex, data: Hex, label: string): Promise
   }
 }
 
-async function sendTx(to: Hex, data: Hex, label: string, owner?: Hex, valueUsd = 0): Promise<string> {
+async function sendTx(to: Hex, data: Hex, label: string, owner?: Hex): Promise<string> {
   if (DRY_RUN) {
-    log('info', 'dry_run_skip', { label, to, valueUsd })
+    log('info', 'dry_run_skip', { label, to })
     if (owner) await simulateTx(owner, to, data, `${label} (dry-run simulate)`).catch(() => null)
     return '0xdryrun'
   }
   if (owner) await simulateTx(owner, to, data, label)
-
-  if (TG_APPROVAL_ENABLED && valueUsd > TX_LIMIT_USD) {
-    log('info', 'awaiting_approval', { label, valueUsd, limit: TX_LIMIT_USD })
-    const approved = await requestTgApproval(label, valueUsd, to)
-    if (!approved) {
-      throw new Error(`tx aborted: approval not granted for ${label} ($${valueUsd.toFixed(2)})`)
-    }
-  }
-
   const args = ['send-tx', '--to', to, '--value', '0', '--data', data, '--chain', `evm:${CHAIN_ID}`]
   if (RPC_URL) args.push('--rpc', RPC_URL)
   const { stdout } = await execa('waap-cli', args)
@@ -372,7 +250,7 @@ async function sendTx(to: Hex, data: Hex, label: string, owner?: Hex, valueUsd =
   if (!match) {
     throw new Error(`Could not extract tx hash: ${stdout.slice(0, 200)}`)
   }
-  log('info', 'tx_submitted', { label, txHash: match[0], valueUsd })
+  log('info', 'tx_submitted', { label, txHash: match[0] })
   return match[0]
 }
 
@@ -509,14 +387,11 @@ function toBaseUnits(usd: number, priceUsd: number, decimals: number): bigint {
 async function depositInto(vault: MorphoVault, owner: Hex, amount: bigint): Promise<void> {
   await ensureApproval(vault.address, amount, owner)
   const data = encodeFunctionData({ abi, functionName: 'deposit', args: [amount, owner] })
-  const valueUsd =
-    Number(formatUnits(amount, vault.asset.decimals)) * (vault.asset.priceUsd ?? 1)
   const txHash = await sendTx(
     vault.address,
     data,
     `deposit ${formatUnits(amount, vault.asset.decimals)} → ${vault.symbol}`,
     owner,
-    valueUsd,
   )
   logEvent('vault_deposit', {
     vaultName: vault.name,
@@ -529,14 +404,11 @@ async function depositInto(vault: MorphoVault, owner: Hex, amount: bigint): Prom
 
 async function withdrawFrom(vault: MorphoVault, owner: Hex, amount: bigint): Promise<void> {
   const data = encodeFunctionData({ abi, functionName: 'withdraw', args: [amount, owner, owner] })
-  const valueUsd =
-    Number(formatUnits(amount, vault.asset.decimals)) * (vault.asset.priceUsd ?? 1)
   const txHash = await sendTx(
     vault.address,
     data,
     `withdraw ${formatUnits(amount, vault.asset.decimals)} ← ${vault.symbol}`,
     owner,
-    valueUsd,
   )
   logEvent('vault_redeem', {
     vaultName: vault.name,
@@ -577,8 +449,8 @@ async function aaveSupply(owner: Hex, amount: bigint, decimals: number, priceUsd
     functionName: 'supply',
     args: [ASSET!, amount, owner, 0],
   })
+  const txHash = await sendTx(AAVE_POOL as Hex, data, `aave supply ${formatUnits(amount, decimals)}`, owner)
   const usd = Number(formatUnits(amount, decimals)) * priceUsd
-  const txHash = await sendTx(AAVE_POOL as Hex, data, `aave supply ${formatUnits(amount, decimals)}`, owner, usd)
   logEvent('idle_fallback_supply', {
     pool: AAVE_POOL,
     amount: amount.toString(),
@@ -596,8 +468,8 @@ async function aaveWithdraw(owner: Hex, amount: bigint, decimals: number, priceU
     functionName: 'withdraw',
     args: [ASSET!, amount, owner],
   })
+  const txHash = await sendTx(AAVE_POOL as Hex, data, `aave withdraw ${formatUnits(amount, decimals)}`, owner)
   const usd = Number(formatUnits(amount, decimals)) * priceUsd
-  const txHash = await sendTx(AAVE_POOL as Hex, data, `aave withdraw ${formatUnits(amount, decimals)}`, owner, usd)
   logEvent('idle_fallback_withdraw', {
     pool: AAVE_POOL,
     amount: amount.toString(),

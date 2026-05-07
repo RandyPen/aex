@@ -44,22 +44,6 @@ AGENT_REWARDS_MIN_CLAIM_WEI=1             # skip claims below this raw amount
 # MATRIX_ACCESS_TOKEN=
 # MATRIX_ALERT_ROOM=!roomid:matrix.org
 
-# Pre-flight tx simulation — viem estimateGas pre-flight for every sendTx.
-# Catches reverts (vault paused, allowance edge, share-rounding) before paying
-# gas and emits gas estimate in tx_simulated event. Set to 0 to disable.
-AGENT_SIMULATE=1
-
-# Telegram approval gate — application-layer 2FA. For txs whose estimated USD
-# value exceeds AGENT_TX_LIMIT_USD, the agent posts an inline-keyboard prompt
-# to TG_APPROVAL_CHAT_ID and waits for a human ✅ / ❌ before submitting.
-# Below the threshold, sendTx auto-approves. Both bot token + chat id must be
-# set to enable. NOT a key-layer 2FA — a compromised agent process could
-# bypass this. Treat as policy gate, not custody primitive.
-# TG_APPROVAL_BOT_TOKEN=
-# TG_APPROVAL_CHAT_ID=
-AGENT_TX_LIMIT_USD=50                # auto-approve up to this; ask above
-AGENT_APPROVAL_TIMEOUT_MS=300000     # 5 min — abort tx if no response
-
 # Optional explicit allowlist of watched vault addresses. If unset, the agent
 # queries the Morpho API for all vaults accepting AGENT_ASSET on this chain.
 # Comma- or whitespace-separated.
