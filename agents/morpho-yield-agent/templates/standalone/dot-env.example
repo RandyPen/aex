@@ -1,0 +1,39 @@
+# Morpho Yield Optimizer Agent
+# https://docs.wallet.human.tech/recipes/morpho-yield-optimizer
+
+# REQUIRED — ERC-20 asset address the agent will deposit into Morpho vaults
+# (USDC default below; replace per-chain).
+AGENT_ASSET=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+AGENT_MAX_DEPOSIT_USD=1000           # hard cap on deposits
+
+# Chain
+CHAIN_ID=8453                        # Base mainnet by default. 1=eth, 137=polygon, 42161=arbitrum, 10=optimism, 11155111=sepolia
+# RPC_URL=https://base.llamarpc.com  # optional custom RPC; defaults to public
+
+# Strategy
+AGENT_MIN_APY_DELTA_BPS=50           # rebalance only if best vault APY > held + 50 bps (0.5%)
+AGENT_POLL_INTERVAL_MS=1800000       # 30 min between checks
+# CHECK_INTERVAL_MS=                 # alias for AGENT_POLL_INTERVAL_MS (legacy name)
+
+# Optional explicit allowlist of watched vault addresses. If unset, the agent
+# queries the Morpho API for all vaults accepting AGENT_ASSET on this chain.
+# Comma- or whitespace-separated.
+# WATCHED_VAULTS=0xVault1,0xVault2,0xVault3
+
+# Safety — DRY_RUN is ON by default. Flip to 0 only when you're ready to send
+# real transactions. Anything other than literal '0' keeps dry-run on.
+AGENT_DRY_RUN=1
+
+# Optional — bypass `waap-cli whoami` on startup. Set to the agent's EVM
+# wallet address when the host doesn't maintain an interactive waap-cli
+# session (credentials in env, transactions sent stateless).
+# WAAP_AGENT_ADDRESS=0x...
+
+# Optional — override Morpho API endpoint
+# MORPHO_API_URL=https://api.morpho.org/graphql
+
+# Optional — log file (JSON-line). Defaults to <projectName>.log in cwd.
+# LOG_FILE=./agent.log
+
+# Optional — custom USDC address for balance snapshots when AGENT_ASSET=USDC
+# USDC_ADDRESS=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
