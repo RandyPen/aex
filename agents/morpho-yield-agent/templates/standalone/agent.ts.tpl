@@ -45,6 +45,18 @@ const AAVE_ATOKEN = (process.env.AAVE_ATOKEN_ADDRESS ?? '') as Hex | ''
 const IDLE_FALLBACK_ENABLED = /^0x[0-9a-fA-F]{40}$/.test(AAVE_POOL) && /^0x[0-9a-fA-F]{40}$/.test(AAVE_ATOKEN)
 const IDLE_FALLBACK_MIN_USD = Number(process.env.AGENT_IDLE_FALLBACK_MIN_USD ?? 1)
 
+// Reward claiming — periodically pulls claimable rewards from the Morpho
+// rewards API and submits Merkle-proof claim() calls to the distributor.
+// Scheduled independently from the rebalance loop so claim cadence isn't
+// tied to APY-check cadence. Disabled unless REWARDS_API_URL is set.
+const REWARDS_API_URL = process.env.REWARDS_API_URL ?? ''
+const REWARDS_CLAIM_ENABLED = REWARDS_API_URL.length > 0
+const REWARDS_CLAIM_INTERVAL_MS = Math.max(
+  60_000,
+  Number(process.env.AGENT_REWARDS_CLAIM_INTERVAL_MS ?? 24 * 60 * 60 * 1000),
+)
+const REWARDS_MIN_CLAIM_WEI = BigInt(process.env.AGENT_REWARDS_MIN_CLAIM_WEI ?? '1')
+
 // Optional explicit watched-vault allowlist. If unset, the agent queries the
 // Morpho API and considers every vault accepting AGENT_ASSET on this chain.
 const WATCHED_VAULTS = (process.env.WATCHED_VAULTS ?? '')
@@ -147,6 +159,11 @@ const abi = parseAbi([
 const aaveAbi = parseAbi([
   'function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)',
   'function withdraw(address asset, uint256 amount, address to) returns (uint256)',
+])
+
+// Morpho Universal Rewards Distributor — single function used to claim.
+const urdAbi = parseAbi([
+  'function claim(address account, address reward, uint256 claimable, bytes32[] proof) returns (uint256 amount)',
 ])
 
 interface MorphoVault {
@@ -439,6 +456,109 @@ async function aaveWithdraw(owner: Hex, amount: bigint, decimals: number, priceU
   return amount
 }
 
+// -----------------------------------------------------------------------------
+// Reward claiming — fetch claimable rewards from the Morpho rewards API and
+// submit Merkle-proof claim() calls against each distributor. Runs on its own
+// cadence (REWARDS_CLAIM_INTERVAL_MS) independent of the rebalance loop.
+// -----------------------------------------------------------------------------
+
+interface ClaimableReward {
+  distributor: Hex
+  reward: Hex
+  claimable: string
+  proof: Hex[]
+  symbol?: string
+  decimals?: number
+}
+
+async function fetchClaimableRewards(owner: Hex): Promise<ClaimableReward[]> {
+  if (!REWARDS_CLAIM_ENABLED) return []
+  const url = REWARDS_API_URL
+    .replace('{address}', owner)
+    .replace('{chainId}', String(CHAIN_ID))
+  try {
+    const res = await request(url, { method: 'GET' })
+    if (res.statusCode >= 400) {
+      log('warn', 'rewards_api_error', { status: res.statusCode })
+      return []
+    }
+    const body = await res.body.json() as unknown
+    // Normalize a few common API shapes:
+    //   { data: [{ distributor, asset, claimable, proof }] }
+    //   [{ distributor, asset, amount, proof }]
+    //   { rewards: [...] }
+    const raw = (body as { data?: unknown; rewards?: unknown })
+    let arr: unknown
+    if (Array.isArray(body)) arr = body
+    else if (Array.isArray(raw.data)) arr = raw.data
+    else if (Array.isArray(raw.rewards)) arr = raw.rewards
+    else arr = []
+    const items = arr as Array<Record<string, unknown>>
+
+    const out: ClaimableReward[] = []
+    for (const item of items) {
+      const dist = ((item.distributor as Record<string, unknown>)?.address ?? item.distributor) as Hex | undefined
+      const reward = ((item.asset as Record<string, unknown>)?.address ?? item.reward ?? item.token) as Hex | undefined
+      const claimableRaw = (item.claimable
+        ?? (item.amount as Record<string, unknown>)?.claimable_now
+        ?? (item.amount as Record<string, unknown>)?.value
+        ?? item.amount) as string | number | undefined
+      const proof = (item.proof ?? (item as Record<string, unknown>).merkle_proof) as Hex[] | undefined
+      if (!dist || !reward || claimableRaw == null || !Array.isArray(proof)) continue
+      const claimable = typeof claimableRaw === 'number' ? BigInt(Math.floor(claimableRaw)).toString() : String(claimableRaw)
+      out.push({
+        distributor: dist,
+        reward,
+        claimable,
+        proof,
+        symbol: ((item.asset as Record<string, unknown>)?.symbol as string | undefined),
+        decimals: ((item.asset as Record<string, unknown>)?.decimals as number | undefined),
+      })
+    }
+    return out
+  } catch (err) {
+    log('warn', 'rewards_fetch_failed', { error: err instanceof Error ? err.message : String(err) })
+    return []
+  }
+}
+
+async function claimRewardsOnce(owner: Hex): Promise<void> {
+  if (!REWARDS_CLAIM_ENABLED) return
+  const claims = await fetchClaimableRewards(owner)
+  if (claims.length === 0) {
+    log('info', 'rewards_none_claimable', {})
+    return
+  }
+  for (const c of claims) {
+    let claimable: bigint
+    try { claimable = BigInt(c.claimable) } catch { continue }
+    if (claimable < REWARDS_MIN_CLAIM_WEI) {
+      log('info', 'rewards_below_min', {
+        reward: c.reward,
+        claimable: c.claimable,
+        symbol: c.symbol,
+      })
+      continue
+    }
+    const data = encodeFunctionData({
+      abi: urdAbi,
+      functionName: 'claim',
+      args: [owner, c.reward, claimable, c.proof],
+    })
+    const txHash = await sendTx(c.distributor, data, `claim ${c.symbol ?? c.reward}`)
+    const formatted = c.decimals != null ? formatUnits(claimable, c.decimals) : c.claimable
+    logEvent('rewards_claimed', {
+      distributor: c.distributor,
+      reward: c.reward,
+      symbol: c.symbol,
+      claimable: c.claimable,
+      claimableFormatted: formatted,
+      txHash,
+    })
+    void sendMatrixAlert(`claimed ${formatted} ${c.symbol ?? 'reward'} from ${c.distributor.slice(0, 10)}…`)
+  }
+}
+
 async function reconcilePositions(owner: Hex, vaults: MorphoVault[]): Promise<HeldPosition[]> {
   const balances = await Promise.all(
     vaults.map(async (v) => ({ vault: v, ...(await positionInVault(v.address, owner)) })),
@@ -674,6 +794,7 @@ async function tick(owner: Hex): Promise<void> {
 
 let stopping = false
 let consecutiveErrors = 0
+let lastClaimAt = 0
 const MAX_CONSECUTIVE_ERRORS = 3
 
 async function main(): Promise<void> {
@@ -700,6 +821,14 @@ async function main(): Promise<void> {
     try {
       await tick(owner)
       consecutiveErrors = 0
+      if (REWARDS_CLAIM_ENABLED && Date.now() - lastClaimAt >= REWARDS_CLAIM_INTERVAL_MS) {
+        try {
+          await claimRewardsOnce(owner)
+        } catch (err) {
+          log('warn', 'rewards_claim_failed', { error: err instanceof Error ? err.message : String(err) })
+        }
+        lastClaimAt = Date.now()
+      }
     } catch (err) {
       consecutiveErrors++
       const msg = err instanceof Error ? err.message : String(err)

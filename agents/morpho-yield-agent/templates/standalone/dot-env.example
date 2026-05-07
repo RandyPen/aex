@@ -10,10 +10,39 @@ AGENT_MAX_DEPOSIT_USD=1000           # hard cap on deposits
 CHAIN_ID=8453                        # Base mainnet by default. 1=eth, 137=polygon, 42161=arbitrum, 10=optimism, 11155111=sepolia
 # RPC_URL=https://base.llamarpc.com  # optional custom RPC; defaults to public
 
-# Strategy
+# Strategy — single-vault delta gate (used only when TOP_N=1)
 AGENT_MIN_APY_DELTA_BPS=50           # rebalance only if best vault APY > held + 50 bps (0.5%)
 AGENT_POLL_INTERVAL_MS=1800000       # 30 min between checks
 # CHECK_INTERVAL_MS=                 # alias for AGENT_POLL_INTERVAL_MS (legacy name)
+
+# Multi-vault portfolio — equal-weight allocation across the top N vaults.
+# Set TOP_N=1 to fall back to winner-take-all. REBAL_DRIFT_BPS gates how far a
+# leg can drift from its target weight (in bps of total portfolio value)
+# before the agent rebalances.
+AGENT_PORTFOLIO_TOP_N=3
+AGENT_REBAL_DRIFT_BPS=500            # 5% drift threshold
+
+# Idle-fallback floor (Aave V3) — when the morpho legs are at target, sweep
+# any remaining idle to Aave so it earns money-market yield. When a leg needs
+# a top-up and wallet idle is short, pull from Aave first.
+# Both POOL + ATOKEN must be set to enable. Disabled if either is blank.
+# Arbitrum native USDC defaults below — replace per-chain / per-asset.
+# AAVE_POOL_ADDRESS=0x794a61358D6845594F94dc1DB02A252b5b4814aD
+# AAVE_ATOKEN_ADDRESS=0x724dc807b04555b71ed48a6896b6F41593b8C637
+AGENT_IDLE_FALLBACK_MIN_USD=1        # don't sweep dust
+
+# Reward claiming — fetch claimable Morpho rewards via API and claim() against
+# the distributor. Disabled unless REWARDS_API_URL is set. Replace {address}
+# / {chainId} placeholders with the agent's owner / current chain at runtime.
+# REWARDS_API_URL=https://rewards.morpho.org/v1/users/{address}?chain_id={chainId}
+AGENT_REWARDS_CLAIM_INTERVAL_MS=86400000  # 24h between claim attempts
+AGENT_REWARDS_MIN_CLAIM_WEI=1             # skip claims below this raw amount
+
+# Matrix alerts — fire-and-forget notifications on rebalance / claim events.
+# All three must be set to enable. No-ops if any is blank.
+# MATRIX_HOMESERVER=https://matrix.org
+# MATRIX_ACCESS_TOKEN=
+# MATRIX_ALERT_ROOM=!roomid:matrix.org
 
 # Optional explicit allowlist of watched vault addresses. If unset, the agent
 # queries the Morpho API for all vaults accepting AGENT_ASSET on this chain.
