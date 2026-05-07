@@ -29,6 +29,13 @@ const MIN_DELTA_BPS = Number(process.env.AGENT_MIN_APY_DELTA_BPS ?? 50)
 const POLL_MS = Number(process.env.AGENT_POLL_INTERVAL_MS ?? process.env.CHECK_INTERVAL_MS ?? 30 * 60 * 1000)
 const LOG_FILE = process.env.LOG_FILE ?? `${AGENT_ID}.log`
 
+// Portfolio sizing — split capital across the top N vaults instead of going
+// all-in on the single highest APY. Equal-weight by default. REBAL_DRIFT_BPS
+// gates how far an individual leg's allocation can drift (in bps of total
+// portfolio value) before the agent rebalances toward the target weight.
+const TOP_N = Math.max(1, Number(process.env.AGENT_PORTFOLIO_TOP_N ?? 3))
+const REBAL_DRIFT_BPS = Math.max(50, Number(process.env.AGENT_REBAL_DRIFT_BPS ?? 500))
+
 // Optional explicit watched-vault allowlist. If unset, the agent queries the
 // Morpho API and considers every vault accepting AGENT_ASSET on this chain.
 const WATCHED_VAULTS = (process.env.WATCHED_VAULTS ?? '')
@@ -387,34 +394,46 @@ async function tick(owner: Hex): Promise<void> {
     return
   }
 
-  // Sort by net APY descending
+  // Rank vaults by net APY descending and pick the top N as the target set.
   vaults.sort((a, b) => (b.state!.netApy! - a.state!.netApy!))
+  const targetVaults = vaults.slice(0, Math.min(TOP_N, vaults.length))
   const best = vaults[0]
   const bestApyBps = Math.round(best.state!.netApy! * 10_000)
+  const blendedApyBps = Math.round(
+    (targetVaults.reduce((s, v) => s + (v.state?.netApy ?? 0), 0) / targetVaults.length) * 10_000,
+  )
 
   log('info', 'cycle', {
     chainId: CHAIN_ID,
     asset: ASSET,
     vaultsConsidered: vaults.length,
+    topN: targetVaults.length,
+    targets: targetVaults.map((v) => ({ symbol: v.symbol, apyBps: Math.round((v.state?.netApy ?? 0) * 10_000) })),
+    blendedApyBps,
     bestSymbol: best.symbol,
     bestNetApyBps: bestApyBps,
   })
 
-  // Walk current positions
+  // Walk current positions across ALL fetched vaults so we notice positions
+  // that have dropped out of the top-N target set.
   const heldList = await reconcilePositions(owner, vaults)
-  const usdcBalance = USDC_ADDRESS.toLowerCase() === ASSET!.toLowerCase()
-    ? Number(formatUnits(await assetBalance(owner), decimals))
+  const idleAssets = await assetBalance(owner)
+  const idleUsdc = USDC_ADDRESS.toLowerCase() === ASSET!.toLowerCase()
+    ? Number(formatUnits(idleAssets, decimals))
     : null
-  if (usdcBalance != null) {
-    logEvent('balance_snapshot', { usdcBalance })
+  if (idleUsdc != null) {
+    logEvent('balance_snapshot', { usdcBalance: idleUsdc })
   }
 
-  // Emit snapshot events for the current position(s)
-  const totalAssetsUsdAcrossVaults = heldList.reduce((sum, p) => {
+  // Total portfolio value in USD = held vaults + idle asset balance
+  const heldUsd = heldList.reduce((sum, p) => {
     const priceUsd = p.vault.asset.priceUsd ?? 1
     const tokens = Number(formatUnits(p.assets, p.vault.asset.decimals))
     return sum + tokens * priceUsd
   }, 0)
+  const idleUsd = (best.asset.priceUsd ?? 1) * Number(formatUnits(idleAssets, decimals))
+  const totalUsd = heldUsd + idleUsd
+  const cappedTotalUsd = MAX_DEPOSIT_USD > 0 ? Math.min(totalUsd, MAX_DEPOSIT_USD) : totalUsd
 
   for (const held of heldList) {
     const heldApyBps = Math.round((held.vault.state?.netApy ?? 0) * 10_000)
@@ -429,80 +448,125 @@ async function tick(owner: Hex): Promise<void> {
       bestNetApyBps: bestApyBps,
       apyDeltaBps: bestApyBps - heldApyBps,
       rebalanceCount,
-      totalAssetsUsdAcrossVaults,
+      totalAssetsUsdAcrossVaults: heldUsd,
+      totalAssetsUsdIncludingIdle: totalUsd,
     })
   }
 
-  const priceUsd = best.asset.priceUsd ?? 1
-  const maxAmount = toBaseUnits(MAX_DEPOSIT_USD, priceUsd, decimals)
+  // Equal-weight target: split capital evenly across the top-N target set.
+  const perLegTargetUsd = cappedTotalUsd / targetVaults.length
+  const targetAddresses = new Set(targetVaults.map((v) => v.address.toLowerCase()))
 
-  if (heldList.length === 0) {
-    // Open initial position in the best vault, capped
-    log('info', 'no_position_opening_initial', {
-      vault: best.symbol,
-      maxDepositUsd: MAX_DEPOSIT_USD,
+  logEvent('portfolio_target', {
+    topN: targetVaults.length,
+    perLegTargetUsd,
+    totalUsd,
+    cappedTotalUsd,
+    legs: targetVaults.map((v) => ({ symbol: v.symbol, address: v.address })),
+  })
+
+  // 1. Exit stale positions — held vault no longer in target set → withdraw fully
+  let didChange = false
+  for (const held of heldList) {
+    if (targetAddresses.has(held.vault.address.toLowerCase())) continue
+    log('info', 'exit_stale_leg', { vault: held.vault.symbol, reason: 'no longer in top N' })
+    logEvent('rebalance_start', {
+      fromVaultAddress: held.vault.address,
+      fromVaultName: held.vault.name,
+      reason: 'leg_dropped_from_top_n',
     })
-    logEvent('no_positions_opening', { vault: best.address })
-    await depositInto(best, owner, maxAmount)
-    return
+    void sendMatrixAlert(
+      `exiting ${held.vault.symbol} — no longer in top ${TOP_N} (now at rank > ${TOP_N})`,
+    )
+    await withdrawFrom(held.vault, owner, held.assets)
+    rebalanceCount++
+    logEvent('rebalance_complete', {
+      fromVaultName: held.vault.name,
+      reason: 'leg_dropped_from_top_n',
+      rebalanceNumber: rebalanceCount,
+    })
+    didChange = true
   }
 
-  // Pick a single primary held position (if multiple, pick the largest)
-  const primary = heldList.sort((a, b) => (a.assets > b.assets ? -1 : 1))[0]
-  if (heldList.length > 1) {
-    log('warn', 'multiple_positions_held', {
-      count: heldList.length,
-      addresses: heldList.map((p) => p.vault.address),
-      pickedPrimary: primary.vault.address,
+  // 2. Drift-correct each target leg toward perLegTargetUsd
+  for (const target of targetVaults) {
+    const held = heldList.find((p) => p.vault.address.toLowerCase() === target.address.toLowerCase())
+    const priceUsd = target.asset.priceUsd ?? 1
+    const heldUsdLeg = held
+      ? Number(formatUnits(held.assets, target.asset.decimals)) * priceUsd
+      : 0
+    const driftUsd = perLegTargetUsd - heldUsdLeg
+    const driftBps = totalUsd > 0 ? Math.round((Math.abs(driftUsd) / totalUsd) * 10_000) : 0
+
+    logEvent('portfolio_drift', {
+      vaultSymbol: target.symbol,
+      vaultAddress: target.address,
+      heldUsd: heldUsdLeg,
+      targetUsd: perLegTargetUsd,
+      driftUsd,
+      driftBps,
+      thresholdBps: REBAL_DRIFT_BPS,
+    })
+
+    if (driftBps < REBAL_DRIFT_BPS) continue
+
+    if (driftUsd > 0) {
+      // Top up — convert USD drift to base units, capped by current idle balance
+      const wantAmount = toBaseUnits(driftUsd, priceUsd, decimals)
+      const currentIdle = await assetBalance(owner)
+      const amount = currentIdle < wantAmount ? currentIdle : wantAmount
+      if (amount === 0n) {
+        log('info', 'topup_skip_no_idle', { vault: target.symbol, wantUsd: driftUsd })
+        continue
+      }
+      logEvent('rebalance_start', {
+        toVaultAddress: target.address,
+        toVaultName: target.name,
+        amountUsd: driftUsd,
+        reason: 'topup_to_target_weight',
+      })
+      void sendMatrixAlert(
+        `topping up ${target.symbol} (${fmtBps(Math.round((target.state?.netApy ?? 0) * 10_000))}) by ~$${driftUsd.toFixed(2)} to hit target weight`,
+      )
+      await depositInto(target, owner, amount)
+      rebalanceCount++
+      logEvent('rebalance_complete', {
+        toVaultName: target.name,
+        reason: 'topup_to_target_weight',
+        rebalanceNumber: rebalanceCount,
+      })
+      didChange = true
+    } else {
+      // Over-allocated — trim by withdrawing the excess
+      const excessUsd = -driftUsd
+      const excessAmount = toBaseUnits(excessUsd, priceUsd, target.asset.decimals)
+      if (excessAmount === 0n || !held) continue
+      logEvent('rebalance_start', {
+        fromVaultAddress: target.address,
+        fromVaultName: target.name,
+        amountUsd: excessUsd,
+        reason: 'trim_over_allocation',
+      })
+      void sendMatrixAlert(
+        `trimming ${target.symbol} by ~$${excessUsd.toFixed(2)} — leg over target weight`,
+      )
+      await withdrawFrom(target, owner, excessAmount)
+      rebalanceCount++
+      logEvent('rebalance_complete', {
+        fromVaultName: target.name,
+        reason: 'trim_over_allocation',
+        rebalanceNumber: rebalanceCount,
+      })
+      didChange = true
+    }
+  }
+
+  if (!didChange) {
+    log('info', 'portfolio_balanced', {
+      topN: TOP_N,
+      driftThresholdBps: REBAL_DRIFT_BPS,
     })
   }
-
-  if (primary.vault.address.toLowerCase() === best.address.toLowerCase()) {
-    log('info', 'already_in_best_vault', { vault: best.symbol })
-    return
-  }
-
-  const heldApyBps = Math.round((primary.vault.state?.netApy ?? 0) * 10_000)
-  const delta = bestApyBps - heldApyBps
-  log('info', 'apy_comparison', {
-    held: primary.vault.symbol,
-    heldApyBps,
-    best: best.symbol,
-    bestApyBps,
-    deltaBps: delta,
-    minDeltaBps: MIN_DELTA_BPS,
-  })
-
-  if (delta < MIN_DELTA_BPS) {
-    log('info', 'delta_below_threshold_holding', { deltaBps: delta, minDeltaBps: MIN_DELTA_BPS })
-    return
-  }
-
-  log('info', 'rebalancing', { from: primary.vault.symbol, to: best.symbol, deltaBps: delta })
-  logEvent('rebalance_start', {
-    fromVaultAddress: primary.vault.address,
-    fromVaultName: primary.vault.name,
-    toVaultAddress: best.address,
-    toVaultName: best.name,
-    apyDeltaBps: delta,
-  })
-  void sendMatrixAlert(
-    `rebalance start: ${primary.vault.symbol} (${fmtBps(heldApyBps)}) → ${best.symbol} (${fmtBps(bestApyBps)}), spread ${fmtBps(delta)}`,
-  )
-
-  await withdrawFrom(primary.vault, owner, primary.assets)
-
-  const redeposit = primary.assets < maxAmount ? primary.assets : maxAmount
-  await depositInto(best, owner, redeposit)
-  rebalanceCount++
-  logEvent('rebalance_complete', {
-    fromVaultName: primary.vault.name,
-    toVaultName: best.name,
-    rebalanceNumber: rebalanceCount,
-  })
-  void sendMatrixAlert(
-    `rebalance complete (#${rebalanceCount}): ${formatUnits(redeposit, primary.vault.asset.decimals)} ${primary.vault.asset.symbol ?? ''} now in ${best.symbol}`,
-  )
 }
 
 let stopping = false
