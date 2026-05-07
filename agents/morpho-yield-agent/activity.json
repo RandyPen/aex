@@ -1,0 +1,64 @@
+{
+  "slug": "morpho-yield-agent",
+  "name": "Morpho Yield Agent",
+  "description": "Deposit into and rebalance across Morpho vaults on EVM. Tracks APY, withdraws + redeposits when a better vault opens.",
+  "version": "0.1.0",
+  "author": "holonym-foundation",
+  "verified": true,
+  "chain": { "family": "evm", "id": 1, "name": "Ethereum" },
+  "category": "yield",
+  "protocols": ["morpho"],
+  "tags": ["yield", "defi", "lending", "rebalance"],
+  "runtimes": ["claude", "standalone", "openclaw", "nous"],
+  "envVars": [
+    {
+      "key": "MORPHO_API_URL",
+      "required": false,
+      "default": "https://blue-api.morpho.org",
+      "description": "Morpho Blue API endpoint"
+    },
+    {
+      "key": "AGENT_ASSET",
+      "required": true,
+      "description": "ERC-20 address of the asset to deposit (e.g. USDC on Ethereum)"
+    },
+    {
+      "key": "AGENT_MAX_DEPOSIT_USD",
+      "required": true,
+      "description": "Hard cap on total USD deposited across vaults"
+    },
+    {
+      "key": "AGENT_MIN_APY_DELTA_BPS",
+      "required": false,
+      "default": "50",
+      "description": "Minimum APY improvement (basis points) before rebalancing"
+    },
+    {
+      "key": "RPC_URL",
+      "required": false,
+      "description": "Ethereum RPC endpoint for on-chain reads (balanceOf, allowance)"
+    },
+    {
+      "key": "AGENT_DRY_RUN",
+      "required": false,
+      "default": "1",
+      "description": "Dry-run mode (default ON). Submit transactions live ONLY when set to the literal string '0'. Any other value (including blank, 'true', '1') keeps the agent in dry-run."
+    }
+  ],
+  "waapFeatures": ["sign-typed-data", "send-tx", "policy"],
+  "recipeUrl": "https://docs.waap.xyz/recipes/waap-cli-morpho-yield-agent",
+  "minCliVersion": "0.0.1",
+  "eip8004": {
+    "supportedTrust": ["tee-attestation", "reputation"],
+    "x402Support": false,
+    "services": [
+      {
+        "type": "A2A",
+        "endpointTemplate": "https://{{host}}/a2a",
+        "version": "0.1",
+        "skills": ["yield-optimization", "morpho"],
+        "domains": ["morpho.org"]
+      }
+    ]
+  }
+}

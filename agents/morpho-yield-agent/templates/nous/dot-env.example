@@ -1,0 +1,9 @@
+# Morpho Yield Agent (Nous)
+AGENT_ASSET=
+AGENT_MAX_DEPOSIT_USD=
+# RPC_URL=https://eth.llamarpc.com
+# AGENT_MIN_APY_DELTA_BPS=50
+# MORPHO_API_URL=https://blue-api.morpho.org
+
+# Safety default — dry-run only. Flip to 0 for live deposits/withdrawals.
+AGENT_DRY_RUN=1
