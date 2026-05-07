@@ -68,6 +68,37 @@ function logEvent(message: string, data: Record<string, unknown> = {}): void {
 }
 
 // -----------------------------------------------------------------------------
+// Matrix alerting — fire-and-forget; never blocks the agent loop on failure.
+// Set MATRIX_HOMESERVER, MATRIX_ACCESS_TOKEN, MATRIX_ALERT_ROOM to enable.
+// -----------------------------------------------------------------------------
+
+async function sendMatrixAlert(message: string): Promise<void> {
+  const homeserver = process.env.MATRIX_HOMESERVER
+  const token = process.env.MATRIX_ACCESS_TOKEN
+  const room = process.env.MATRIX_ALERT_ROOM
+  if (!homeserver || !token || !room) return
+  try {
+    const txnId = `${Date.now()}${Math.random().toString(36).slice(2)}`
+    const url = `${homeserver}/_matrix/client/v3/rooms/${encodeURIComponent(room)}/send/m.room.message/${txnId}`
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 10_000)
+    await fetch(url, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ msgtype: 'm.text', body: `[${AGENT_ID}] ${message}` }),
+      signal: ctrl.signal,
+    })
+    clearTimeout(timer)
+  } catch (err) {
+    log('warn', 'matrix_alert_failed', { error: err instanceof Error ? err.message : String(err) })
+  }
+}
+
+function fmtBps(bps: number): string {
+  return `${(bps / 100).toFixed(2)}%`
+}
+
+// -----------------------------------------------------------------------------
 // Chain selection — viem requires an explicit chain object for some helpers.
 // -----------------------------------------------------------------------------
 
@@ -455,6 +486,9 @@ async function tick(owner: Hex): Promise<void> {
     toVaultName: best.name,
     apyDeltaBps: delta,
   })
+  void sendMatrixAlert(
+    `rebalance start: ${primary.vault.symbol} (${fmtBps(heldApyBps)}) → ${best.symbol} (${fmtBps(bestApyBps)}), spread ${fmtBps(delta)}`,
+  )
 
   await withdrawFrom(primary.vault, owner, primary.assets)
 
@@ -466,6 +500,9 @@ async function tick(owner: Hex): Promise<void> {
     toVaultName: best.name,
     rebalanceNumber: rebalanceCount,
   })
+  void sendMatrixAlert(
+    `rebalance complete (#${rebalanceCount}): ${formatUnits(redeposit, primary.vault.asset.decimals)} ${primary.vault.asset.symbol ?? ''} now in ${best.symbol}`,
+  )
 }
 
 let stopping = false
