@@ -36,6 +36,15 @@ const LOG_FILE = process.env.LOG_FILE ?? `${AGENT_ID}.log`
 const TOP_N = Math.max(1, Number(process.env.AGENT_PORTFOLIO_TOP_N ?? 3))
 const REBAL_DRIFT_BPS = Math.max(50, Number(process.env.AGENT_REBAL_DRIFT_BPS ?? 500))
 
+// Idle-fallback floor — when the portfolio is at target and there's still idle
+// asset balance, sweep it to Aave V3 to keep the money productive. If
+// portfolio legs need a top-up, the fallback is unwound first.
+// Both AAVE_POOL_ADDRESS and AAVE_ATOKEN_ADDRESS must be set to enable.
+const AAVE_POOL = (process.env.AAVE_POOL_ADDRESS ?? '') as Hex | ''
+const AAVE_ATOKEN = (process.env.AAVE_ATOKEN_ADDRESS ?? '') as Hex | ''
+const IDLE_FALLBACK_ENABLED = /^0x[0-9a-fA-F]{40}$/.test(AAVE_POOL) && /^0x[0-9a-fA-F]{40}$/.test(AAVE_ATOKEN)
+const IDLE_FALLBACK_MIN_USD = Number(process.env.AGENT_IDLE_FALLBACK_MIN_USD ?? 1)
+
 // Optional explicit watched-vault allowlist. If unset, the agent queries the
 // Morpho API and considers every vault accepting AGENT_ASSET on this chain.
 const WATCHED_VAULTS = (process.env.WATCHED_VAULTS ?? '')
@@ -132,6 +141,12 @@ const abi = parseAbi([
   'function withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)',
   'function redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)',
   'function convertToAssets(uint256 shares) view returns (uint256 assets)',
+])
+
+// Aave V3 Pool ABI slice — supply / withdraw the floor allocation.
+const aaveAbi = parseAbi([
+  'function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode)',
+  'function withdraw(address asset, uint256 amount, address to) returns (uint256)',
 ])
 
 interface MorphoVault {
@@ -369,6 +384,61 @@ async function withdrawFrom(vault: MorphoVault, owner: Hex, amount: bigint): Pro
 
 interface HeldPosition { vault: MorphoVault; shares: bigint; assets: bigint }
 
+// -----------------------------------------------------------------------------
+// Aave V3 idle-fallback helpers — supply idle asset to Aave to capture money-
+// market yield while waiting for a Morpho rebalance signal.
+// -----------------------------------------------------------------------------
+
+async function aaveSuppliedAssets(owner: Hex): Promise<bigint> {
+  if (!IDLE_FALLBACK_ENABLED) return 0n
+  return (await publicClient.readContract({
+    address: AAVE_ATOKEN as Hex,
+    abi,
+    functionName: 'balanceOf',
+    args: [owner],
+  })) as bigint
+}
+
+async function aaveSupply(owner: Hex, amount: bigint, decimals: number, priceUsd: number): Promise<void> {
+  if (!IDLE_FALLBACK_ENABLED) return
+  await ensureApproval(AAVE_POOL as Hex, amount, owner)
+  const data = encodeFunctionData({
+    abi: aaveAbi,
+    functionName: 'supply',
+    args: [ASSET!, amount, owner, 0],
+  })
+  const txHash = await sendTx(AAVE_POOL as Hex, data, `aave supply ${formatUnits(amount, decimals)}`)
+  const usd = Number(formatUnits(amount, decimals)) * priceUsd
+  logEvent('idle_fallback_supply', {
+    pool: AAVE_POOL,
+    amount: amount.toString(),
+    amountFormatted: formatUnits(amount, decimals),
+    amountUsd: usd,
+    txHash,
+  })
+  void sendMatrixAlert(`swept ~$${usd.toFixed(2)} idle to aave (no morpho leg needed top-up)`)
+}
+
+async function aaveWithdraw(owner: Hex, amount: bigint, decimals: number, priceUsd: number): Promise<bigint> {
+  if (!IDLE_FALLBACK_ENABLED) return 0n
+  const data = encodeFunctionData({
+    abi: aaveAbi,
+    functionName: 'withdraw',
+    args: [ASSET!, amount, owner],
+  })
+  const txHash = await sendTx(AAVE_POOL as Hex, data, `aave withdraw ${formatUnits(amount, decimals)}`)
+  const usd = Number(formatUnits(amount, decimals)) * priceUsd
+  logEvent('idle_fallback_withdraw', {
+    pool: AAVE_POOL,
+    amount: amount.toString(),
+    amountFormatted: formatUnits(amount, decimals),
+    amountUsd: usd,
+    txHash,
+  })
+  void sendMatrixAlert(`pulled ~$${usd.toFixed(2)} from aave to fund a morpho leg top-up`)
+  return amount
+}
+
 async function reconcilePositions(owner: Hex, vaults: MorphoVault[]): Promise<HeldPosition[]> {
   const balances = await Promise.all(
     vaults.map(async (v) => ({ vault: v, ...(await positionInVault(v.address, owner)) })),
@@ -418,21 +488,27 @@ async function tick(owner: Hex): Promise<void> {
   // that have dropped out of the top-N target set.
   const heldList = await reconcilePositions(owner, vaults)
   const idleAssets = await assetBalance(owner)
+  const aaveAssets = await aaveSuppliedAssets(owner)
   const idleUsdc = USDC_ADDRESS.toLowerCase() === ASSET!.toLowerCase()
     ? Number(formatUnits(idleAssets, decimals))
     : null
   if (idleUsdc != null) {
-    logEvent('balance_snapshot', { usdcBalance: idleUsdc })
+    logEvent('balance_snapshot', {
+      usdcBalance: idleUsdc,
+      aaveBalance: Number(formatUnits(aaveAssets, decimals)),
+    })
   }
 
-  // Total portfolio value in USD = held vaults + idle asset balance
+  // Total portfolio value in USD = held morpho vaults + Aave floor + wallet idle
+  const priceUsdAsset = best.asset.priceUsd ?? 1
   const heldUsd = heldList.reduce((sum, p) => {
     const priceUsd = p.vault.asset.priceUsd ?? 1
     const tokens = Number(formatUnits(p.assets, p.vault.asset.decimals))
     return sum + tokens * priceUsd
   }, 0)
-  const idleUsd = (best.asset.priceUsd ?? 1) * Number(formatUnits(idleAssets, decimals))
-  const totalUsd = heldUsd + idleUsd
+  const idleUsd = priceUsdAsset * Number(formatUnits(idleAssets, decimals))
+  const aaveUsd = priceUsdAsset * Number(formatUnits(aaveAssets, decimals))
+  const totalUsd = heldUsd + idleUsd + aaveUsd
   const cappedTotalUsd = MAX_DEPOSIT_USD > 0 ? Math.min(totalUsd, MAX_DEPOSIT_USD) : totalUsd
 
   for (const held of heldList) {
@@ -511,9 +587,19 @@ async function tick(owner: Hex): Promise<void> {
     if (driftBps < REBAL_DRIFT_BPS) continue
 
     if (driftUsd > 0) {
-      // Top up — convert USD drift to base units, capped by current idle balance
+      // Top up — convert USD drift to base units, capped by what's available.
+      // If wallet idle is short, pull from the Aave floor first.
       const wantAmount = toBaseUnits(driftUsd, priceUsd, decimals)
-      const currentIdle = await assetBalance(owner)
+      let currentIdle = await assetBalance(owner)
+      if (currentIdle < wantAmount && IDLE_FALLBACK_ENABLED) {
+        const shortfall = wantAmount - currentIdle
+        const aaveBal = await aaveSuppliedAssets(owner)
+        const pullAmount = aaveBal < shortfall ? aaveBal : shortfall
+        if (pullAmount > 0n) {
+          await aaveWithdraw(owner, pullAmount, decimals, priceUsdAsset)
+          currentIdle = await assetBalance(owner)
+        }
+      }
       const amount = currentIdle < wantAmount ? currentIdle : wantAmount
       if (amount === 0n) {
         log('info', 'topup_skip_no_idle', { vault: target.symbol, wantUsd: driftUsd })
@@ -566,6 +652,23 @@ async function tick(owner: Hex): Promise<void> {
       topN: TOP_N,
       driftThresholdBps: REBAL_DRIFT_BPS,
     })
+  }
+
+  // 3. Idle-fallback sweep — anything left in the wallet after the morpho
+  // legs are at target gets swept to Aave so it earns money-market yield.
+  if (IDLE_FALLBACK_ENABLED) {
+    const finalIdle = await assetBalance(owner)
+    const finalIdleUsd = priceUsdAsset * Number(formatUnits(finalIdle, decimals))
+    if (finalIdleUsd >= IDLE_FALLBACK_MIN_USD) {
+      log('info', 'idle_fallback_sweep', { idleUsd: finalIdleUsd, threshold: IDLE_FALLBACK_MIN_USD })
+      await aaveSupply(owner, finalIdle, decimals, priceUsdAsset)
+    } else {
+      log('info', 'idle_fallback_skip', {
+        idleUsd: finalIdleUsd,
+        threshold: IDLE_FALLBACK_MIN_USD,
+        reason: 'below threshold',
+      })
+    }
   }
 }
 
