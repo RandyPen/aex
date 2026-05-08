@@ -1,0 +1,8 @@
+# Uniswap v3 LP Rebalancer (Nous / Hermes)
+AGENT_POSITION_ID=
+AGENT_MAX_DEPOSIT_USD=
+# AGENT_RANGE_BPS=500
+# RPC_URL=https://mainnet.base.org
+
+# Safety default — dry-run only.
+AGENT_DRY_RUN=1

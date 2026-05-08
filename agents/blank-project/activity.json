@@ -1,0 +1,22 @@
+{
+  "slug": "blank-project",
+  "name": "Blank Project",
+  "description": "Minimal WaaP agent scaffold — creates a session and signs an example message. Starting point for custom agents.",
+  "version": "0.1.0",
+  "author": "holonym-foundation",
+  "verified": true,
+  "chain": { "family": "any", "id": null, "name": "Any" },
+  "category": "setup",
+  "protocols": [],
+  "tags": ["scaffold", "starter"],
+  "runtimes": ["claude", "standalone", "openclaw", "nous"],
+  "envVars": [],
+  "waapFeatures": ["signup", "sign-message"],
+  "recipeUrl": null,
+  "minCliVersion": "0.0.1",
+  "eip8004": {
+    "supportedTrust": ["tee-attestation"],
+    "x402Support": false,
+    "services": []
+  }
+}
