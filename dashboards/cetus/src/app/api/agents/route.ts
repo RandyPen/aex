@@ -28,7 +28,7 @@ export async function GET() {
   const agents = r.rows.map((row) => {
     const lastTs = row.last_event_ts ? new Date(row.last_event_ts).getTime() : null;
     const ageMs = lastTs ? now - lastTs : null;
-    const isRunning = ageMs !== null && ageMs < 10 * 60 * 1000;
+    const isRunning = ageMs !== null && ageMs < 35 * 60 * 1000;
     return {
       id: row.id,
       name: row.name,

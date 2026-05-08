@@ -175,7 +175,7 @@ export async function getAgentStatusFromDb(agentId: string): Promise<{ status: "
   const now = new Date();
   const ageMs = now.getTime() - lastTs.getTime();
   // Consider running if last event within 10 minutes (cycle is 5 min)
-  const isRunning = ageMs < 10 * 60 * 1000;
+  const isRunning = ageMs < 35 * 60 * 1000;
   const lastActivity = formatRelative(ageMs);
   return {
     status: isRunning ? "running" : "stopped",
