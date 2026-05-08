@@ -103,6 +103,7 @@ export function BalanceChart({ data, events }: BalanceChartProps) {
             />
           )}
           {txEvents.map((event, i) => {
+            if (chartData.length === 0) return null;
             const closest = chartData.reduce((prev, curr) =>
               Math.abs(new Date(curr.ts).getTime() - new Date(event.ts).getTime()) <
               Math.abs(new Date(prev.ts).getTime() - new Date(event.ts).getTime())
