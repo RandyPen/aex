@@ -37,6 +37,23 @@ ssh aex 'cd /home/agents/arbitrum-morpho-yield && sudo sed -i "s/AGENT_DRY_RUN=.
 
 Real `.env` values stay on the host (never in git). See [`.env.example`](./.env.example) for the shape — same as the template's [`dot-env.example`](../../agents/morpho-yield-agent/templates/standalone/dot-env.example) with the Arbitrum-specific addresses pre-filled.
 
+## Wallet policy — 2FA and daily spend limits
+
+Use waap-cli's native policy commands to gate transactions at the **key layer** (the second 2PC signing party enforces the policy — a compromised agent process cannot bypass it).
+
+```bash
+# Telegram 2FA — gates all outbound transactions on a TG approval
+ssh aex 'cd /home/agents/arbitrum-morpho-yield && waap-cli 2fa enable --telegram <chatId>'
+
+# Daily USD spend limit — caps cumulative tx value per 24h window
+ssh aex 'cd /home/agents/arbitrum-morpho-yield && waap-cli policy set --daily-spend-limit 500'
+
+# Inspect current policy
+ssh aex 'cd /home/agents/arbitrum-morpho-yield && waap-cli policy get'
+```
+
+For high-frequency low-value txs (small drift rebalances, idle sweeps, dust reward claims), issue a **Privilege** (formerly Permission Token) scoped to the morpho vault contracts so they bypass 2FA up to a per-tx cap. Anything outside the scope still requires Telegram approval.
+
 ## Telemetry
 
 Events flow: agent stdout → `/home/agents/logs/morpho-yield.stdout.log` → `morpho-yield-tailer.service` → `https://aex-agents.vercel.app/api/ingest` → Neon Postgres → `/api/agent` → [aex-agents.vercel.app/arbitrum-morpho-yield](https://aex-agents.vercel.app/arbitrum-morpho-yield) dashboard.
