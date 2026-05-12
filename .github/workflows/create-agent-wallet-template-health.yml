@@ -1,0 +1,149 @@
+name: create-agent-wallet template health
+
+on:
+  schedule:
+    # Weekly — Mondays at 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'packages/create-agent-wallet/**'
+      - 'agents/**'
+
+jobs:
+  smoke-test-templates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        activity:
+          - blank-project
+          - polymarket-agent
+          - snapshot-agent
+          - morpho-yield-agent
+          - cetus-yield-agent
+          - evm-uniswap-rebalancer
+        runtime:
+          - claude
+          - standalone
+          - openclaw
+          - nous
+    env:
+      # Matrix values are author-controlled; passed via env for safe `run:` usage.
+      ACTIVITY: ${{ matrix.activity }}
+      RUNTIME: ${{ matrix.runtime }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: packages/create-agent-wallet
+        run: npm install
+
+      - name: Build CLI + registry
+        working-directory: packages/create-agent-wallet
+        run: npm run build
+
+      - name: Scaffold activity x runtime
+        env:
+          CAW_DIST: ${{ github.workspace }}/packages/create-agent-wallet/dist
+        run: |
+          # Run from /tmp so the basename is the project-name argument.
+          # Passing a full path tripped the project-name validator
+          # (`Use lowercase letters, digits, and dashes only.`).
+          cd /tmp
+          node "$CAW_DIST/index.js" \
+            --activity "$ACTIVITY" \
+            --runtime "$RUNTIME" \
+            --no-session \
+            --registry "file://$CAW_DIST/registry.json" \
+            --yes \
+            "smoke-$ACTIVITY-$RUNTIME"
+
+      - name: Verify scaffold — Standalone
+        if: matrix.runtime == 'standalone'
+        run: |
+          cd "/tmp/smoke-$ACTIVITY-$RUNTIME"
+          test -f package.json
+          test -f agent.ts
+          test -f Dockerfile
+          test -f .env.example
+          test -f .gitignore
+          test -f agent-registration.json
+          test -f .well-known/agent-registration.json
+          npm install --ignore-scripts
+
+      - name: Verify scaffold — Claude
+        if: matrix.runtime == 'claude'
+        run: |
+          cd "/tmp/smoke-$ACTIVITY-$RUNTIME"
+          test -f SKILL.md
+          test -f CLAUDE.md
+          test -f mcp-config.json
+          test -f .env.example
+          test -f agent-registration.json
+
+      - name: Verify scaffold — OpenClaw
+        if: matrix.runtime == 'openclaw'
+        run: |
+          cd "/tmp/smoke-$ACTIVITY-$RUNTIME"
+          # OpenClaw is AgentSkills-conformant — SKILL.md only, no agent.yaml.
+          test -f SKILL.md
+          test -f .env.example
+          test -f agent-registration.json
+
+      - name: Verify scaffold — Nous
+        if: matrix.runtime == 'nous'
+        run: |
+          cd "/tmp/smoke-$ACTIVITY-$RUNTIME"
+          # Hermes/Nous is AgentSkills-conformant — SKILL.md only, no
+          # nous-config.json or agent.md.
+          test -f SKILL.md
+          test -f .env.example
+          test -f agent-registration.json
+
+      - name: Install waap-cli (for live signup + sign smoke)
+        if: env.WAAP_TEST_EMAIL != ''
+        env:
+          WAAP_TEST_EMAIL: ${{ secrets.WAAP_TEST_EMAIL }}
+        run: npm install -g @human.tech/waap-cli@latest
+
+      - name: Live waap-cli signup + sign-message smoke
+        if: env.WAAP_TEST_EMAIL != ''
+        env:
+          WAAP_TEST_EMAIL: ${{ secrets.WAAP_TEST_EMAIL }}
+          WAAP_TEST_PASSWORD: ${{ secrets.WAAP_TEST_PASSWORD }}
+        run: |
+          # Use a per-run alias to avoid collisions across matrix cells
+          STAMP=$(date +%s)-$$
+          AGENT_EMAIL="${WAAP_TEST_EMAIL%@*}+ci-$STAMP@${WAAP_TEST_EMAIL#*@}"
+          waap-cli signup --email "$AGENT_EMAIL" --password "$WAAP_TEST_PASSWORD"
+          waap-cli whoami --json
+          waap-cli sign-message --message 0x68656c6c6f --json
+
+      - name: Run unit + integration tests (once — on blank/standalone cell)
+        if: matrix.activity == 'blank-project' && matrix.runtime == 'standalone'
+        working-directory: packages/create-agent-wallet
+        run: npx vitest run
+
+      - name: Report failure to issue tracker
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        env:
+          ACTIVITY: ${{ matrix.activity }}
+          RUNTIME: ${{ matrix.runtime }}
+        with:
+          script: |
+            const activity = process.env.ACTIVITY
+            const runtime = process.env.RUNTIME
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[template-health] ${activity} / ${runtime} scaffold broke`,
+              body: `Weekly template health smoke test failed for **${activity}** / **${runtime}**.\n\nLogs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              labels: ['template-health', 'product:waap'],
+            })

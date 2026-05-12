@@ -1,0 +1,70 @@
+{
+  "slug": "evm-uniswap-rebalancer",
+  "name": "Uniswap v3 LP Rebalancer",
+  "description": "Monitor a Uniswap v3 concentrated-liquidity position on Base. When the price moves out of the configured range, decreaseLiquidity + collect fees + burn the position NFT to drain assets back to your EOA. **Phase 1 (current):** drain-and-stop — auto-mint of a new position is a documented stub; you re-stake manually. Phase 2 will wire up automatic re-mint per the recipe. Hard cap on total deposited USD enforced.",
+  "version": "0.1.0",
+  "author": "holonym-foundation",
+  "verified": true,
+  "chain": { "family": "evm", "id": 8453, "name": "Base" },
+  "category": "yield",
+  "protocols": ["uniswap-v3"],
+  "tags": ["yield", "defi", "clmm", "concentrated-liquidity", "rebalance"],
+  "runtimes": ["claude", "standalone", "openclaw", "nous"],
+  "envVars": [
+    {
+      "key": "AGENT_POSITION_ID",
+      "required": true,
+      "description": "Uniswap v3 NonfungiblePositionManager NFT token id of the position to manage"
+    },
+    {
+      "key": "AGENT_MAX_DEPOSIT_USD",
+      "required": true,
+      "description": "Hard cap on total deposited USD when reopening positions (no default — must be user-set)"
+    },
+    {
+      "key": "AGENT_RANGE_BPS",
+      "required": false,
+      "default": "500",
+      "description": "Tick range half-width around the current tick when reopening (raw tick units; default 500 ≈ ±2.5% on a 1.0001-tick grid)"
+    },
+    {
+      "key": "AGENT_MAX_SLIPPAGE_BPS",
+      "required": false,
+      "default": "200",
+      "description": "Maximum slippage tolerated on decreaseLiquidity, in basis points (default 200 = 2%). Bounds attacker-controlled value loss during the unwind"
+    },
+    {
+      "key": "RPC_URL",
+      "required": false,
+      "description": "Base RPC endpoint used by viem for on-chain reads (positions, slot0). Defaults to https://mainnet.base.org"
+    },
+    {
+      "key": "AGENT_POLL_INTERVAL_MS",
+      "required": false,
+      "default": "900000",
+      "description": "Milliseconds between range checks (default 15 min)"
+    },
+    {
+      "key": "AGENT_DRY_RUN",
+      "required": false,
+      "default": "1",
+      "description": "Dry-run mode (default ON). Submit transactions live ONLY when set to the literal string '0'. Any other value (including blank, 'true', '1') keeps the agent in dry-run."
+    }
+  ],
+  "waapFeatures": ["send-tx", "policy"],
+  "recipeUrl": "https://docs.waap.xyz/recipes/waap-cli-uniswap-rebalancer",
+  "minCliVersion": "0.0.1",
+  "eip8004": {
+    "supportedTrust": ["tee-attestation", "reputation"],
+    "x402Support": false,
+    "services": [
+      {
+        "type": "A2A",
+        "endpointTemplate": "https://{{host}}/a2a",
+        "version": "0.1",
+        "skills": ["uniswap-v3-lp", "rebalancer"],
+        "domains": ["uniswap.org"]
+      }
+    ]
+  }
+}

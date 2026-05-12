@@ -1,0 +1,72 @@
+{
+  "slug": "snapshot-agent",
+  "name": "Snapshot Governance Agent",
+  "description": "Monitor Snapshot spaces, sign votes with EIP-712, and submit via the Snapshot Sequencer. Runs on any EVM chain; vote signatures are off-chain.",
+  "version": "0.1.0",
+  "author": "holonym-foundation",
+  "verified": true,
+  "chain": { "family": "evm", "id": 1, "name": "Ethereum" },
+  "category": "governance",
+  "protocols": ["snapshot"],
+  "tags": ["governance", "dao", "eip-712", "off-chain"],
+  "runtimes": ["claude", "standalone", "openclaw", "nous"],
+  "envVars": [
+    {
+      "key": "SNAPSHOT_HUB_URL",
+      "required": false,
+      "default": "https://hub.snapshot.org",
+      "description": "Snapshot Hub — used for GraphQL reads (proposals, scores)"
+    },
+    {
+      "key": "SNAPSHOT_SEQUENCER_URL",
+      "required": false,
+      "default": "https://seq.snapshot.org",
+      "description": "Snapshot Sequencer — used for signed-envelope submissions. Body: {address, sig, data:{domain,types,message}}"
+    },
+    {
+      "key": "SNAPSHOT_SPACES",
+      "required": true,
+      "description": "Comma-separated Snapshot space IDs to monitor (e.g. aave.eth,uniswap.eth)"
+    },
+    {
+      "key": "AGENT_VOTE_STRATEGY",
+      "required": false,
+      "default": "delegate",
+      "description": "Voting strategy: delegate | conservative | abstain-on-unknown"
+    },
+    {
+      "key": "AGENT_APP_TAG",
+      "required": false,
+      "default": "waap-agentic-wallet",
+      "description": "String written to Snapshot Vote.app field for attribution"
+    },
+    {
+      "key": "AGENT_POLL_INTERVAL_MS",
+      "required": false,
+      "default": "300000",
+      "description": "Milliseconds between Snapshot polls (default 5 min)"
+    },
+    {
+      "key": "AGENT_DRY_RUN",
+      "required": false,
+      "default": "1",
+      "description": "Dry-run mode (default ON). Submit votes live ONLY when set to the literal string '0'. Any other value (including blank, 'true', '1') keeps the agent in dry-run."
+    }
+  ],
+  "waapFeatures": ["sign-typed-data"],
+  "recipeUrl": "https://docs.waap.xyz/recipes/waap-cli-snapshot-agent",
+  "minCliVersion": "0.0.1",
+  "eip8004": {
+    "supportedTrust": ["tee-attestation", "reputation"],
+    "x402Support": false,
+    "services": [
+      {
+        "type": "A2A",
+        "endpointTemplate": "https://{{host}}/a2a",
+        "version": "0.1",
+        "skills": ["dao-governance", "snapshot-voting"],
+        "domains": ["snapshot.org"]
+      }
+    ]
+  }
+}

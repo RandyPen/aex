@@ -1,0 +1,9 @@
+# Snapshot Governance Agent (Nous)
+SNAPSHOT_SPACES=
+# SNAPSHOT_HUB_URL=https://hub.snapshot.org
+# SNAPSHOT_SEQUENCER_URL=https://seq.snapshot.org
+# AGENT_VOTE_STRATEGY=delegate      # delegate | conservative | abstain-on-unknown
+# AGENT_APP_TAG=waap-agentic-wallet
+
+# Safety default — dry-run only. Flip to 0 for live voting.
+AGENT_DRY_RUN=1

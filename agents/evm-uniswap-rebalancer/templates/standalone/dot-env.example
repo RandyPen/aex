@@ -1,0 +1,18 @@
+# Uniswap v3 LP Rebalancer (Base)
+
+# REQUIRED — Uniswap v3 NFT token id of the position to manage
+AGENT_POSITION_ID=
+
+# REQUIRED — hard cap on USD redeployed when reopening (no default)
+AGENT_MAX_DEPOSIT_USD=
+
+# Base RPC for viem reads (positions, slot0). Defaults to public RPC.
+# RPC_URL=https://mainnet.base.org
+
+# Optional
+# AGENT_RANGE_BPS=500              # ±2.5% range half-width (raw tick units)
+# AGENT_MAX_SLIPPAGE_BPS=200       # 2% — tolerated slippage on decreaseLiquidity unwind
+# AGENT_POLL_INTERVAL_MS=900000    # 15 min
+
+# Safety default — dry-run only. Live execution requires AGENT_DRY_RUN=0.
+AGENT_DRY_RUN=1
