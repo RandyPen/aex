@@ -1,0 +1,73 @@
+{
+  "slug": "recurring-payments",
+  "name": "Recurring Payments Agent",
+  "description": "Automate recurring ERC-20 and native token payments on any EVM chain. Reads a JSON config of scheduled payments, checks due dates each tick, and submits transactions via WaaP CLI.",
+  "version": "0.1.0",
+  "author": "holonym-foundation",
+  "verified": true,
+  "chain": { "family": "evm", "id": 8453, "name": "Base" },
+  "category": "payments",
+  "protocols": ["erc20"],
+  "tags": ["payments", "recurring", "payroll", "subscriptions", "evm"],
+  "runtimes": ["standalone"],
+  "envVars": [
+    {
+      "key": "PAYMENT_CONFIG_PATH",
+      "required": true,
+      "description": "Absolute or relative path to the JSON file defining recurring payment schedules"
+    },
+    {
+      "key": "DEFAULT_CHAIN_ID",
+      "required": false,
+      "default": "8453",
+      "description": "Default EVM chain ID (Base = 8453). Individual payments can override this."
+    },
+    {
+      "key": "AGENT_POLL_INTERVAL_MS",
+      "required": false,
+      "default": "60000",
+      "description": "Milliseconds between payment-due checks"
+    },
+    {
+      "key": "PAYMENT_HISTORY_PATH",
+      "required": false,
+      "default": "./data/payment-history.json",
+      "description": "Path to the local JSON file tracking payment history"
+    },
+    {
+      "key": "AGENT_LOG_FILE",
+      "required": false,
+      "default": "./logs/recurring-payments.jsonl",
+      "description": "Path to structured JSON log file for AEX dashboard ingest"
+    },
+    {
+      "key": "AGENT_DRY_RUN",
+      "required": false,
+      "default": "0",
+      "description": "Set to 1 to log payment intents without submitting transactions"
+    }
+  ],
+  "waapFeatures": ["send-tx", "policy"],
+  "recipeUrl": "https://docs.waap.xyz/recipes/recurring-payments-agent",
+  "minCliVersion": "0.0.1",
+  "eip8004": {
+    "supportedTrust": ["tee-attestation", "reputation"],
+    "x402Support": false,
+    "services": [
+      {
+        "type": "A2A",
+        "endpointTemplate": "https://{{host}}/a2a",
+        "version": "0.1",
+        "skills": ["recurring-payments"],
+        "domains": []
+      },
+      {
+        "type": "MCP",
+        "endpointTemplate": "stdio://@human.tech/waap-mcp",
+        "version": "1.0",
+        "skills": [],
+        "domains": []
+      }
+    ]
+  }
+}

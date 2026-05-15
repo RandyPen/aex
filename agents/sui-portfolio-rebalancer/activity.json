@@ -1,0 +1,94 @@
+{
+  "slug": "sui-portfolio-rebalancer",
+  "name": "Portfolio Rebalancer (Sui)",
+  "description": "Monitors a target token price on Cetus DEX (Sui) and rebalances holdings via swaps when price hits configurable high or low thresholds. Grid-trading style: sell into strength, buy into weakness.",
+  "version": "0.1.0",
+  "author": "holonym-foundation",
+  "verified": true,
+  "chain": { "family": "sui", "id": 1, "name": "Sui Mainnet" },
+  "category": "trading",
+  "protocols": ["cetus"],
+  "tags": ["trading", "rebalancer", "grid", "defi", "sui"],
+  "runtimes": ["standalone"],
+  "envVars": [
+    {
+      "key": "TARGET_TOKEN_TYPE",
+      "required": true,
+      "description": "Sui type string for the target token (e.g. 0x2::sui::SUI)"
+    },
+    {
+      "key": "QUOTE_TOKEN_TYPE",
+      "required": true,
+      "description": "Sui type string for the quote token (e.g. 0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC)"
+    },
+    {
+      "key": "TARGET_ALLOCATION_USD",
+      "required": true,
+      "description": "Target USD value of the target token to maintain after each rebalance"
+    },
+    {
+      "key": "HIGH_PRICE_THRESHOLD",
+      "required": true,
+      "description": "Price above which the agent sells target token (e.g. 4.50 for SUI at $4.50)"
+    },
+    {
+      "key": "LOW_PRICE_THRESHOLD",
+      "required": true,
+      "description": "Price below which the agent buys target token (e.g. 3.00 for SUI at $3.00)"
+    },
+    {
+      "key": "CETUS_POOL_ID",
+      "required": true,
+      "description": "Cetus pool object ID for the target/quote pair (e.g. SUI/USDC: 0xb8d7d9e66a60c239e7a60110efcf8de6c705580ed924d0dde141f4a0e2c90105)"
+    },
+    {
+      "key": "POLL_INTERVAL_MS",
+      "required": false,
+      "default": "60000",
+      "description": "Milliseconds between price checks (default 60 seconds)"
+    },
+    {
+      "key": "SLIPPAGE_BPS",
+      "required": false,
+      "default": "50",
+      "description": "Maximum slippage in basis points for swaps (default 50 = 0.5%)"
+    },
+    {
+      "key": "SUI_RPC",
+      "required": false,
+      "description": "Sui RPC endpoint (defaults to @mysten/sui mainnet fullnode)"
+    },
+    {
+      "key": "AGENT_LOG_FILE",
+      "required": false,
+      "description": "Path for JSON-line log file (default: ./logs/<agentId>.jsonl)"
+    },
+    {
+      "key": "NETWORK",
+      "required": false,
+      "default": "mainnet",
+      "description": "Sui network: mainnet or testnet"
+    },
+    {
+      "key": "WAAP_AGENT_ADDRESS",
+      "required": false,
+      "description": "Override the Sui wallet address (bypass waap-cli whoami)"
+    }
+  ],
+  "waapFeatures": ["send-tx", "policy"],
+  "recipeUrl": "https://docs.wallet.human.tech/recipes/sui-portfolio-rebalancer",
+  "minCliVersion": "0.0.1",
+  "eip8004": {
+    "supportedTrust": ["tee-attestation", "reputation"],
+    "x402Support": false,
+    "services": [
+      {
+        "type": "A2A",
+        "endpointTemplate": "https://{{host}}/a2a",
+        "version": "0.1",
+        "skills": ["portfolio-rebalancing", "grid-trading", "cetus"],
+        "domains": ["cetus.zone"]
+      }
+    ]
+  }
+}
