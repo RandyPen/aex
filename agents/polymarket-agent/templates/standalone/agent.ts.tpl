@@ -65,7 +65,7 @@ interface GammaEvent {
 interface GammaMarket {
   id: string
   question: string
-  tokens: { token_id: string; outcome: string }[]
+  clobTokenIds?: string | string[]
   outcomePrices?: string
 }
 
@@ -111,14 +111,12 @@ async function whoami(): Promise<WhoamiResult> {
 async function signOrder(typedData: unknown): Promise<string> {
   const { stdout } = await execa('waap-cli', [
     'sign-typed-data',
-    '--chain-id',
-    String(CHAIN_ID),
     '--data',
     JSON.stringify(typedData),
-    '--json',
   ])
-  const parsed = parseWaapJson<{ signature: string }>(stdout)
-  return parsed.signature
+  const match = stdout.match(/(?:Signature:\s*|"signature":\s*"?)(0x[a-fA-F0-9]+)/)
+  if (!match) throw new Error(`Could not parse signature from waap-cli output: ${stdout.slice(0, 200)}`)
+  return match[1]
 }
 
 // ---------------------------------------------------------------------------
@@ -295,16 +293,23 @@ async function tick(address: string): Promise<void> {
   }
 
   // Select the first event with tradeable tokens
-  const targetEvent = events.find(
-    (e) => e.markets?.length > 0 && e.markets[0].tokens?.length > 0,
-  )
+  const targetEvent = events.find((e) => {
+    if (!e.markets?.length) return false
+    const ids = typeof e.markets[0].clobTokenIds === 'string'
+      ? JSON.parse(e.markets[0].clobTokenIds)
+      : e.markets[0].clobTokenIds
+    return Array.isArray(ids) && ids.length > 0
+  })
   if (!targetEvent) {
     log('warn', 'market_scan', { status: 'no_tradeable_markets' })
     return
   }
 
   const market = targetEvent.markets[0]
-  const tokenId = market.tokens[0].token_id
+  const clobTokenIds: string[] = typeof market.clobTokenIds === 'string'
+    ? JSON.parse(market.clobTokenIds)
+    : market.clobTokenIds ?? []
+  const tokenId = clobTokenIds[0]
   const side: 'BUY' | 'SELL' = 'BUY'
   const amountUsd = Math.min(MAX_ORDER_USD, 5)
 

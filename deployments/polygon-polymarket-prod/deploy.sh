@@ -13,6 +13,10 @@
 
 set -euo pipefail
 
+# IMPORTANT: waap-cli stores sessions relative to HOME. The systemd service
+# sets HOME to the working directory. Login with:
+#   HOME=/path/to/agent ./node_modules/.bin/waap-cli login --email ... --password ...
+
 AEX_HOST="${AEX_HOST:-agents@88.99.125.107}"
 AGENT_DIR="/home/agents/polygon-polymarket"
 TEMPLATE_DIR="$(cd "$(dirname "$0")/../../agents/polymarket-agent/templates/standalone" && pwd)"
