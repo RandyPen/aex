@@ -6,7 +6,7 @@
   "author": "holonym-foundation",
   "verified": true,
   "chain": { "family": "evm", "id": 8453, "name": "Base" },
-  "category": "devtools",
+  "category": "other",
   "protocols": ["github"],
   "tags": ["testing", "integration-tests", "wallet", "github", "automation", "evm"],
   "runtimes": ["claude", "standalone"],

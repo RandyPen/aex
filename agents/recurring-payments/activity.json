@@ -6,7 +6,7 @@
   "author": "holonym-foundation",
   "verified": true,
   "chain": { "family": "evm", "id": 8453, "name": "Base" },
-  "category": "payments",
+  "category": "other",
   "protocols": ["erc20"],
   "tags": ["payments", "recurring", "payroll", "subscriptions", "evm"],
   "runtimes": ["standalone"],
