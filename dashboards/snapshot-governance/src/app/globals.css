@@ -1,0 +1,193 @@
+@import url('./tokens.css');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--color-background-0);
+  color: var(--color-text-90);
+  font-family: var(--font-family-interface), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-5xl);
+}
+
+.card {
+  background: var(--color-background-5);
+  border: 1px solid var(--color-border-20);
+  border-radius: var(--radi-xl);
+  padding: var(--space-4xl);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2xl);
+}
+
+.card-title {
+  font-size: var(--font-size-text-sm);
+  font-weight: var(--font-weight-med);
+  color: var(--color-text-60);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radi-full);
+  display: inline-block;
+  margin-right: var(--space-sm);
+}
+
+.status-dot.running { background: var(--color-green-50); box-shadow: 0 0 6px var(--color-green-50); }
+.status-dot.stopped { background: var(--color-red-60); }
+.status-dot.error { background: var(--color-yellow-50); }
+
+.mono { font-family: var(--font-family-code), monospace; font-size: var(--font-size-text-xs); }
+
+.grid { display: grid; gap: var(--space-4xl); }
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 768px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
+
+.stat-value {
+  font-size: var(--font-size-h6);
+  font-weight: var(--font-weight-semi);
+  font-family: var(--font-family-code), monospace;
+}
+
+.stat-label {
+  font-size: var(--font-size-text-xs);
+  color: var(--color-text-40);
+  margin-top: var(--space-xxs);
+}
+
+.tag {
+  display: inline-block;
+  padding: var(--space-xxs) var(--space-md);
+  border-radius: var(--radi-xs);
+  font-size: var(--font-size-text-xs);
+  font-weight: var(--font-weight-med);
+  font-family: var(--font-family-code), monospace;
+}
+
+.tag-chain {
+  background: var(--color-emerald-5);
+  color: var(--color-emerald-70);
+}
+
+.tag-protocol {
+  background: var(--color-blue-5);
+  color: var(--color-blue-70);
+}
+
+.tag-yes {
+  background: var(--color-green-5);
+  color: var(--color-green-70);
+}
+
+.tag-no {
+  background: var(--color-red-5);
+  color: var(--color-red-70);
+}
+
+.event-list {
+  list-style: none;
+  padding: 0;
+}
+
+.event-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-lg);
+  padding: var(--space-lg) 0;
+  border-bottom: 1px solid var(--color-border-20);
+}
+
+.event-item:last-child { border-bottom: none; }
+
+.event-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radi-full);
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.event-icon.success { background: var(--color-green-50); }
+.event-icon.error { background: var(--color-red-60); }
+.event-icon.warning { background: var(--color-yellow-50); }
+.event-icon.info { background: var(--color-emerald-50); }
+
+.event-time {
+  font-size: var(--font-size-text-xs);
+  color: var(--color-text-40);
+  font-family: var(--font-family-code), monospace;
+  min-width: 5rem;
+}
+
+.event-message {
+  font-size: var(--font-size-text-sm);
+  color: var(--color-text-60);
+}
+
+.config-row {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-md) 0;
+  border-bottom: 1px solid var(--color-border-20);
+  font-size: var(--font-size-text-sm);
+}
+
+.config-row:last-child { border-bottom: none; }
+.config-key { color: var(--color-text-40); }
+.config-value { color: var(--color-text-90); font-family: var(--font-family-code), monospace; }
+
+.tag-for {
+  background: var(--color-green-5);
+  color: var(--color-green-70);
+}
+
+.tag-against {
+  background: var(--color-red-5);
+  color: var(--color-red-70);
+}
+
+.tag-abstain {
+  background: var(--color-yellow-5);
+  color: var(--color-yellow-70);
+}
+
+.tag-active {
+  background: var(--color-blue-5);
+  color: var(--color-blue-70);
+}
+
+.tag-closed {
+  background: var(--color-neutral-5);
+  color: var(--color-neutral-60);
+}
+
+.tag-passed {
+  background: var(--color-green-5);
+  color: var(--color-green-70);
+}
+
+.tag-failed {
+  background: var(--color-red-5);
+  color: var(--color-red-70);
+}
