@@ -53,6 +53,14 @@ export async function POST(req: Request) {
     const data = rest;
 
     try {
+      // Auto-register unknown agents on first event
+      await pool.query(
+        `INSERT INTO agents (id, name, chain, protocol, category, wallet_address, metadata, started_at)
+         VALUES ($1, $1, 'unknown', 'unknown', 'other', '', '{}', NOW())
+         ON CONFLICT (id) DO NOTHING`,
+        [agent],
+      );
+
       await pool.query(
         `INSERT INTO agent_events (agent_id, ts, level, message, data) VALUES ($1, $2, $3, $4, $5)`,
         [agent, ts, level ?? "info", message, JSON.stringify(data)],
