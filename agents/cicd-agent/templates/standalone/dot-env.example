@@ -1,0 +1,32 @@
+# Required — GitHub personal access token (needs repo + actions scopes)
+GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Required — Comma-separated repos to monitor
+GITHUB_REPOS=owner/repo1,owner/repo2
+
+# Required — Staging/preview environment base URL to run wallet tests against
+STAGING_URL=https://staging.myapp.xyz
+
+# Required — Contract address for contract interaction tests
+TEST_CONTRACT_ADDRESS=0x0000000000000000000000000000000000000000
+
+# Required — ERC-20 token address for approval tests
+TEST_TOKEN_ADDRESS=0x0000000000000000000000000000000000000000
+
+# Optional — Polling interval in milliseconds (default: 30000)
+POLL_INTERVAL_MS=30000
+
+# Optional — Structured log file path (default: ./logs/cicd-agent.jsonl)
+AGENT_LOG_FILE=./logs/cicd-agent.jsonl
+
+# Optional — Webhook URL for deploy-on-merge (e.g. Vercel deploy hook)
+DEPLOY_WEBHOOK_URL=https://api.vercel.com/v1/integrations/deploy/prj_xxxxx/xxxxx
+
+# Optional — GitHub Actions workflow file to dispatch for CI (default: ci.yml)
+CI_WORKFLOW_ID=ci.yml
+
+# Optional — ETH amount for the transaction test, sent to self on testnet (default: 0.0001)
+TEST_SEND_AMOUNT_ETH=0.0001
+
+# Optional — Hex-encoded calldata for contract interaction test (default: 0x)
+TEST_CONTRACT_METHOD=0x

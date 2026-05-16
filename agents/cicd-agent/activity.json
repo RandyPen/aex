@@ -1,0 +1,98 @@
+{
+  "slug": "cicd-agent",
+  "name": "Wallet Integration Test Agent",
+  "description": "Run real wallet integration tests against staging environments on every PR. The agent IS the test user — it connects its own WaaP wallet, signs messages, sends testnet transactions, approves tokens, and calls contracts, then posts results as PR comments. Triggers deployment on merge. Runs on Base.",
+  "version": "0.2.0",
+  "author": "holonym-foundation",
+  "verified": true,
+  "chain": { "family": "evm", "id": 8453, "name": "Base" },
+  "category": "other",
+  "protocols": ["github"],
+  "tags": ["testing", "integration-tests", "wallet", "github", "automation", "evm"],
+  "runtimes": ["claude", "standalone"],
+  "envVars": [
+    {
+      "key": "GITHUB_TOKEN",
+      "required": true,
+      "description": "GitHub personal access token with repo and actions scopes"
+    },
+    {
+      "key": "GITHUB_REPOS",
+      "required": true,
+      "description": "Comma-separated list of repos to monitor (e.g. owner/repo1,owner/repo2)"
+    },
+    {
+      "key": "STAGING_URL",
+      "required": true,
+      "description": "Base URL of the staging/preview environment to test against (e.g. https://staging.myapp.xyz)"
+    },
+    {
+      "key": "TEST_CONTRACT_ADDRESS",
+      "required": true,
+      "description": "Address of the contract to call during contract interaction tests"
+    },
+    {
+      "key": "TEST_TOKEN_ADDRESS",
+      "required": true,
+      "description": "ERC-20 token address used for approval tests"
+    },
+    {
+      "key": "POLL_INTERVAL_MS",
+      "required": false,
+      "default": "30000",
+      "description": "Milliseconds between GitHub polling cycles"
+    },
+    {
+      "key": "AGENT_LOG_FILE",
+      "required": false,
+      "default": "./logs/cicd-agent.jsonl",
+      "description": "Path to structured JSON log file"
+    },
+    {
+      "key": "DEPLOY_WEBHOOK_URL",
+      "required": false,
+      "description": "Webhook URL to trigger deployments on merge to main (e.g. Vercel deploy hook)"
+    },
+    {
+      "key": "CI_WORKFLOW_ID",
+      "required": false,
+      "default": "ci.yml",
+      "description": "GitHub Actions workflow file name or ID to dispatch for CI runs"
+    },
+    {
+      "key": "TEST_SEND_AMOUNT_ETH",
+      "required": false,
+      "default": "0.0001",
+      "description": "ETH amount to send in the transaction test (sent to self on testnet)"
+    },
+    {
+      "key": "TEST_CONTRACT_METHOD",
+      "required": false,
+      "default": "0x",
+      "description": "Hex-encoded calldata for the contract interaction test"
+    }
+  ],
+  "waapFeatures": ["send-tx", "sign-message", "policy"],
+  "recipeUrl": "https://docs.waap.xyz/recipes/cicd-agent",
+  "minCliVersion": "0.0.1",
+  "eip8004": {
+    "supportedTrust": ["tee-attestation", "reputation"],
+    "x402Support": false,
+    "services": [
+      {
+        "type": "A2A",
+        "endpointTemplate": "https://{{host}}/a2a",
+        "version": "0.1",
+        "skills": ["wallet-integration-testing"],
+        "domains": ["github.com"]
+      },
+      {
+        "type": "MCP",
+        "endpointTemplate": "stdio://@human.tech/waap-mcp",
+        "version": "1.0",
+        "skills": [],
+        "domains": []
+      }
+    ]
+  }
+}

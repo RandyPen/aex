@@ -1,0 +1,97 @@
+{
+  "slug": "polymarket-llm-analyst",
+  "name": "Polymarket LLM Analyst",
+  "description": "AI-driven prediction market trading agent that uses an LLM to analyze market questions and place bets based on confidence scores",
+  "version": "0.1.0",
+  "author": "holonym-foundation",
+  "verified": true,
+  "chain": { "family": "evm", "id": 137, "name": "Polygon" },
+  "category": "trading",
+  "protocols": ["polymarket"],
+  "tags": ["prediction-market", "evm", "eip-712", "llm", "ai-analyst"],
+  "runtimes": ["standalone"],
+  "envVars": [
+    {
+      "key": "POLYMARKET_API_URL",
+      "required": false,
+      "default": "https://clob.polymarket.com",
+      "description": "Polymarket CLOB API endpoint"
+    },
+    {
+      "key": "AGENT_POLL_INTERVAL_MS",
+      "required": false,
+      "default": "60000",
+      "description": "Milliseconds between market polls"
+    },
+    {
+      "key": "AGENT_MAX_ORDER_USD",
+      "required": true,
+      "description": "Maximum USD value per order (hard cap enforced by the agent)"
+    },
+    {
+      "key": "LLM_PROVIDER",
+      "required": true,
+      "description": "LLM provider for market analysis. Supported values: anthropic, openai"
+    },
+    {
+      "key": "LLM_API_KEY",
+      "required": true,
+      "description": "API key for the configured LLM provider"
+    },
+    {
+      "key": "CONFIDENCE_THRESHOLD",
+      "required": false,
+      "default": "0.7",
+      "description": "Minimum confidence score (0-1) required to place a bet. Markets below this threshold are skipped."
+    },
+    {
+      "key": "LLM_DELAY_MS",
+      "required": false,
+      "default": "1000",
+      "description": "Milliseconds to wait between LLM API calls for rate limiting"
+    },
+    {
+      "key": "POLY_API_KEY",
+      "required": false,
+      "description": "Polymarket CLOB L2 auth -- API key. Mint via clob-client deriveApiKey() or POST /auth/derive-api-key. Required for order submission; not needed for read-only market polling."
+    },
+    {
+      "key": "POLY_PASSPHRASE",
+      "required": false,
+      "description": "Polymarket CLOB L2 auth -- API key passphrase. Returned alongside POLY_API_KEY at derivation time."
+    },
+    {
+      "key": "POLY_API_SECRET",
+      "required": false,
+      "description": "Polymarket CLOB L2 auth -- API key secret used to compute the HMAC for the POLY_SIGNATURE header. Returned alongside POLY_API_KEY at derivation time."
+    },
+    {
+      "key": "POLY_ADDRESS",
+      "required": false,
+      "description": "Polymarket CLOB L2 auth -- wallet address tied to the API key. Defaults to waap-cli whoami evmWalletAddress when omitted."
+    }
+  ],
+  "waapFeatures": ["sign-typed-data", "send-tx", "policy"],
+  "recipeUrl": "https://docs.waap.xyz/recipes/waap-cli-polymarket-llm-analyst",
+  "minCliVersion": "0.0.1",
+  "eip8004": {
+    "supportedTrust": ["tee-attestation", "reputation"],
+    "x402Support": false,
+    "services": [
+      {
+        "type": "A2A",
+        "endpointTemplate": "https://{{host}}/a2a",
+        "version": "0.1",
+        "skills": ["prediction-market-analysis", "prediction-market-trading"],
+        "domains": ["polymarket.com"]
+      },
+      {
+        "type": "MCP",
+        "endpointTemplate": "stdio://@human.tech/waap-mcp",
+        "version": "1.0",
+        "skills": [],
+        "domains": []
+      }
+    ]
+  }
+}

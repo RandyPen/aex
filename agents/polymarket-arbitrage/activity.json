@@ -1,0 +1,81 @@
+{
+  "slug": "polymarket-arbitrage",
+  "name": "Polymarket Arbitrage Agent",
+  "description": "Monitors price discrepancies between related Polymarket markets and places opposing bets to capture spreads.",
+  "version": "0.1.0",
+  "author": "holonym-foundation",
+  "verified": true,
+  "chain": { "family": "evm", "id": 137, "name": "Polygon" },
+  "category": "trading",
+  "protocols": ["polymarket"],
+  "tags": ["prediction-market", "arbitrage", "evm", "eip-712"],
+  "runtimes": ["standalone"],
+  "envVars": [
+    {
+      "key": "POLYMARKET_API_URL",
+      "required": false,
+      "default": "https://clob.polymarket.com",
+      "description": "Polymarket CLOB API endpoint"
+    },
+    {
+      "key": "AGENT_POLL_INTERVAL_MS",
+      "required": false,
+      "default": "30000",
+      "description": "Milliseconds between arbitrage scans"
+    },
+    {
+      "key": "AGENT_MAX_ORDER_USD",
+      "required": true,
+      "description": "Maximum USD value per order leg (hard cap enforced by the agent)"
+    },
+    {
+      "key": "MIN_SPREAD_BPS",
+      "required": false,
+      "default": "50",
+      "description": "Minimum spread in basis points to trigger an arbitrage trade (default: 50 bps / 0.5%)"
+    },
+    {
+      "key": "POLY_API_KEY",
+      "required": true,
+      "description": "Polymarket CLOB L2 auth -- API key. Mint via clob-client deriveApiKey() or POST /auth/derive-api-key."
+    },
+    {
+      "key": "POLY_PASSPHRASE",
+      "required": true,
+      "description": "Polymarket CLOB L2 auth -- API key passphrase. Returned alongside POLY_API_KEY at derivation time."
+    },
+    {
+      "key": "POLY_API_SECRET",
+      "required": true,
+      "description": "Polymarket CLOB L2 auth -- API key secret used to compute the HMAC for the POLY_SIGNATURE header."
+    },
+    {
+      "key": "POLY_ADDRESS",
+      "required": false,
+      "description": "Polymarket CLOB L2 auth -- wallet address tied to the API key. Defaults to waap-cli whoami evmWalletAddress when omitted."
+    }
+  ],
+  "waapFeatures": ["sign-typed-data", "send-tx", "policy"],
+  "recipeUrl": "https://docs.waap.xyz/recipes/waap-cli-polymarket-arbitrage",
+  "minCliVersion": "0.0.1",
+  "eip8004": {
+    "supportedTrust": ["tee-attestation", "reputation"],
+    "x402Support": false,
+    "services": [
+      {
+        "type": "A2A",
+        "endpointTemplate": "https://{{host}}/a2a",
+        "version": "0.1",
+        "skills": ["prediction-market-arbitrage"],
+        "domains": ["polymarket.com"]
+      },
+      {
+        "type": "MCP",
+        "endpointTemplate": "stdio://@human.tech/waap-mcp",
+        "version": "1.0",
+        "skills": [],
+        "domains": []
+      }
+    ]
+  }
+}

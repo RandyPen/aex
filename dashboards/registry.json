@@ -8,5 +8,65 @@
     "type": "lp",
     "components": ["universal", "lp"],
     "vercelUrl": "https://dashboard-three-psi-67.vercel.app"
+  },
+  {
+    "slug": "polymarket",
+    "name": "Polymarket Signal Trader Dashboard",
+    "agentSlug": "polymarket-agent",
+    "chain": "polygon",
+    "protocol": "polymarket",
+    "type": "signal-trader",
+    "components": ["universal", "signal-trader"],
+    "vercelUrl": null
+  },
+  {
+    "slug": "polymarket-llm-analyst",
+    "name": "Polymarket LLM Analyst Dashboard",
+    "agentSlug": "polymarket-llm-analyst",
+    "chain": "polygon",
+    "protocol": "polymarket",
+    "type": "signal-trader",
+    "components": ["universal", "signal-trader"],
+    "vercelUrl": null
+  },
+  {
+    "slug": "polymarket-arbitrage",
+    "name": "Polymarket Arbitrage Dashboard",
+    "agentSlug": "polymarket-arbitrage",
+    "chain": "polygon",
+    "protocol": "polymarket",
+    "type": "arbitrage",
+    "components": ["universal", "arbitrage"],
+    "vercelUrl": null
+  },
+  {
+    "slug": "uniswap-rebalancer",
+    "name": "Uniswap Rebalancer Dashboard",
+    "agentSlug": "evm-uniswap-rebalancer",
+    "chain": "evm",
+    "protocol": "uniswap",
+    "type": "rebalancer",
+    "components": ["universal", "rebalancer"],
+    "vercelUrl": null
+  },
+  {
+    "slug": "evm-portfolio-rebalancer",
+    "name": "EVM Portfolio Rebalancer Dashboard",
+    "agentSlug": "evm-portfolio-rebalancer",
+    "chain": "evm",
+    "protocol": null,
+    "type": "rebalancer",
+    "components": ["universal", "rebalancer"],
+    "vercelUrl": null
+  },
+  {
+    "slug": "sui-portfolio-rebalancer",
+    "name": "Sui Portfolio Rebalancer Dashboard",
+    "agentSlug": "sui-portfolio-rebalancer",
+    "chain": "sui",
+    "protocol": null,
+    "type": "rebalancer",
+    "components": ["universal", "rebalancer"],
+    "vercelUrl": null
   }
 ]

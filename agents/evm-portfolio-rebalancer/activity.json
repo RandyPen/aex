@@ -1,0 +1,107 @@
+{
+  "slug": "evm-portfolio-rebalancer",
+  "name": "Portfolio Rebalancer (EVM)",
+  "description": "Monitor a token price and rebalance holdings when price crosses configurable high/low thresholds. Grid trading strategy via Uniswap V3 on EVM chains.",
+  "version": "0.1.0",
+  "author": "holonym-foundation",
+  "verified": true,
+  "chain": { "family": "evm", "id": 8453, "name": "Base" },
+  "category": "trading",
+  "protocols": ["uniswap-v3"],
+  "tags": ["grid-trading", "rebalancer", "evm", "defi", "uniswap"],
+  "runtimes": ["claude", "standalone"],
+  "envVars": [
+    {
+      "key": "TARGET_TOKEN",
+      "required": true,
+      "description": "Address of the token to rebalance (e.g. WETH address on Base)"
+    },
+    {
+      "key": "QUOTE_TOKEN",
+      "required": true,
+      "description": "Address of the quote/stable token (e.g. USDC address on Base)"
+    },
+    {
+      "key": "TARGET_ALLOCATION_USD",
+      "required": true,
+      "description": "Target USD value of TARGET_TOKEN holdings to maintain (e.g. 1000)"
+    },
+    {
+      "key": "HIGH_PRICE_THRESHOLD",
+      "required": true,
+      "description": "Sell trigger — rebalance when TARGET_TOKEN price rises above this USD value"
+    },
+    {
+      "key": "LOW_PRICE_THRESHOLD",
+      "required": true,
+      "description": "Buy trigger — rebalance when TARGET_TOKEN price falls below this USD value"
+    },
+    {
+      "key": "DEX_ROUTER",
+      "required": true,
+      "description": "Uniswap V3 SwapRouter02 contract address"
+    },
+    {
+      "key": "POOL_ADDRESS",
+      "required": true,
+      "description": "Uniswap V3 pool address for the TARGET_TOKEN/QUOTE_TOKEN pair"
+    },
+    {
+      "key": "POOL_FEE",
+      "required": false,
+      "default": "3000",
+      "description": "Uniswap V3 pool fee tier in bps (500 = 0.05%, 3000 = 0.3%, 10000 = 1%)"
+    },
+    {
+      "key": "TARGET_DECIMALS",
+      "required": false,
+      "default": "18",
+      "description": "Decimals for the TARGET_TOKEN (WETH = 18)"
+    },
+    {
+      "key": "QUOTE_DECIMALS",
+      "required": false,
+      "default": "6",
+      "description": "Decimals for the QUOTE_TOKEN (USDC = 6)"
+    },
+    {
+      "key": "TOKEN0_IS_TARGET",
+      "required": false,
+      "default": "true",
+      "description": "Whether TARGET_TOKEN is token0 in the pool. Set to false if QUOTE_TOKEN is token0."
+    },
+    {
+      "key": "POLL_INTERVAL_MS",
+      "required": false,
+      "default": "30000",
+      "description": "Milliseconds between price checks"
+    },
+    {
+      "key": "SLIPPAGE_BPS",
+      "required": false,
+      "default": "50",
+      "description": "Maximum slippage in basis points (50 = 0.5%)"
+    },
+    {
+      "key": "AGENT_LOG_FILE",
+      "required": false,
+      "description": "Path to structured JSONL log file. Defaults to ./logs/<agentId>.jsonl"
+    }
+  ],
+  "waapFeatures": ["send-tx", "policy"],
+  "recipeUrl": "https://docs.waap.xyz/recipes/evm-portfolio-rebalancer",
+  "minCliVersion": "0.0.1",
+  "eip8004": {
+    "supportedTrust": ["tee-attestation", "reputation"],
+    "x402Support": false,
+    "services": [
+      {
+        "type": "MCP",
+        "endpointTemplate": "stdio://@human.tech/waap-mcp",
+        "version": "1.0",
+        "skills": [],
+        "domains": []
+      }
+    ]
+  }
+}
