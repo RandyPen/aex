@@ -53,12 +53,35 @@ export async function POST(req: Request) {
     const data = rest;
 
     try {
-      // Auto-register unknown agents on first event
+      // Auto-register unknown agents on first event.
+      // If the event is agent_start and contains metadata, use it to populate the agent record.
+      const agentName = data.name ?? agent;
+      const agentChain = data.chainId ? (
+        data.chainId === 137 ? 'polygon' :
+        data.chainId === 8453 ? 'base' :
+        data.chainId === 42161 ? 'arbitrum' :
+        data.chainId === 1 ? 'ethereum' :
+        data.network === 'mainnet' && agent.includes('sui') ? 'sui' :
+        'unknown'
+      ) : (agent.includes('sui') ? 'sui' : agent.includes('polygon') ? 'polygon' : agent.includes('base') ? 'base' : agent.includes('arbitrum') ? 'arbitrum' : 'unknown');
+      const agentCategory = agent.includes('polymarket') || agent.includes('rebalancer') || agent.includes('portfolio') ? 'trading' :
+        agent.includes('cetus') || agent.includes('morpho') || agent.includes('uniswap') ? 'yield' :
+        agent.includes('snapshot') || agent.includes('governance') ? 'governance' :
+        'other';
+      const agentProtocol = agent.includes('polymarket') ? 'polymarket' :
+        agent.includes('cetus') ? 'cetus' : agent.includes('morpho') ? 'morpho' :
+        agent.includes('uniswap') ? 'uniswap' : agent.includes('snapshot') ? 'snapshot' : 'unknown';
+      const walletAddr = typeof data.wallet === 'string' ? data.wallet : '';
+
       await pool.query(
         `INSERT INTO agents (id, name, chain, protocol, category, wallet_address, metadata, started_at)
-         VALUES ($1, $1, 'unknown', 'unknown', 'other', '', '{}', NOW())
-         ON CONFLICT (id) DO NOTHING`,
-        [agent],
+         VALUES ($1, $2, $3, $4, $5, $6, '{}', NOW())
+         ON CONFLICT (id) DO UPDATE SET
+           chain = CASE WHEN agents.chain = 'unknown' THEN EXCLUDED.chain ELSE agents.chain END,
+           protocol = CASE WHEN agents.protocol = 'unknown' THEN EXCLUDED.protocol ELSE agents.protocol END,
+           category = CASE WHEN agents.category = 'other' AND EXCLUDED.category != 'other' THEN EXCLUDED.category ELSE agents.category END,
+           wallet_address = CASE WHEN agents.wallet_address = '' AND EXCLUDED.wallet_address != '' THEN EXCLUDED.wallet_address ELSE agents.wallet_address END`,
+        [agent, agentName, agentChain, agentProtocol, agentCategory, walletAddr],
       );
 
       await pool.query(
