@@ -47,3 +47,26 @@ export async function GET() {
 
   return NextResponse.json({ agents });
 }
+
+export async function PUT(req: Request) {
+  const pool = getPool();
+  if (!pool) return NextResponse.json({ error: "no database" }, { status: 500 });
+
+  const body = await req.json();
+  const { id, name, description, chain, protocol, category, walletAddress } = body;
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+
+  await pool.query(
+    `UPDATE agents SET
+       name = COALESCE($2, name),
+       description = COALESCE($3, description),
+       chain = COALESCE($4, chain),
+       protocol = COALESCE($5, protocol),
+       category = COALESCE($6, category),
+       wallet_address = COALESCE($7, wallet_address)
+     WHERE id = $1`,
+    [id, name, description, chain, protocol, category, walletAddress],
+  );
+
+  return NextResponse.json({ updated: id });
+}
