@@ -9,7 +9,7 @@
   "category": "trading",
   "protocols": ["polymarket"],
   "tags": ["prediction-market", "arbitrage", "evm", "eip-712"],
-  "runtimes": ["standalone"],
+  "runtimes": ["standalone", "claude", "nous", "openclaw"],
   "envVars": [
     {
       "key": "POLYMARKET_API_URL",
