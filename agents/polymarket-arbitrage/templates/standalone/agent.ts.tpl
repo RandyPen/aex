@@ -182,8 +182,6 @@ async function whoami(): Promise<WhoamiResult> {
 async function signOrder(typedData: unknown): Promise<string> {
   const { stdout } = await execa('waap-cli', [
     'sign-typed-data',
-    '--chain-id',
-    String(CHAIN_ID),
     '--data',
     JSON.stringify(typedData),
     '--json',

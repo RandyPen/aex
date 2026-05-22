@@ -190,8 +190,6 @@ function buildVoteTypedData(params: {
 async function signTypedData(data: unknown): Promise<string> {
   const { stdout } = await execa('waap-cli', [
     'sign-typed-data',
-    '--chain-id',
-    '1',
     '--data',
     JSON.stringify(data),
     '--json',

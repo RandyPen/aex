@@ -17,7 +17,7 @@ Hermes Agent skill for Polymarket. Uses the AgentSkills open standard.
 ## Tools
 
 - `waap-cli whoami --json`
-- `waap-cli sign-typed-data --chain-id {{chainId}} --data <json> --json`
+- `waap-cli sign-typed-data --data <json> --json`
 - HTTP GET `${POLYMARKET_API_URL}/markets?status=open`
 - HTTP POST `${POLYMARKET_API_URL}/order`
 
