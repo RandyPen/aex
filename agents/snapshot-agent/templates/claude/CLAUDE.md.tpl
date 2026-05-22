@@ -11,7 +11,7 @@
 ## Commands
 
 - `waap-cli whoami --json`
-- `waap-cli sign-typed-data --chain-id 1 --data '<snapshot-vote-json>' --json`
+- `waap-cli sign-typed-data --data '<snapshot-vote-json>' --json`
 - HTTP GET/POST to `${SNAPSHOT_HUB_URL}`
 
 ## Rules

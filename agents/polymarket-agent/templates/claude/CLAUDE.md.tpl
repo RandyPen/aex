@@ -11,7 +11,7 @@
 ## Commands
 
 - `waap-cli whoami --json`
-- `waap-cli sign-typed-data --chain-id {{chainId}} --data '<json>' --json`
+- `waap-cli sign-typed-data --data '<json>' --json`
 - Standard HTTP to `POLYMARKET_API_URL`
 
 ## Hard limits

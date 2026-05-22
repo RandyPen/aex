@@ -17,7 +17,7 @@ and submits them to the Snapshot Sequencer.
 ## Tools
 
 - `waap-cli whoami --json`
-- `waap-cli sign-typed-data --chain-id 1 --data <json> --json`
+- `waap-cli sign-typed-data --data <json> --json`
 - HTTP POST `${SNAPSHOT_HUB_URL}/graphql`   (list active proposals + scores — hub.snapshot.org)
 - HTTP POST `${SNAPSHOT_SEQUENCER_URL}`     (submit signed vote — seq.snapshot.org, NOT hub.snapshot.org/api/msg)
 

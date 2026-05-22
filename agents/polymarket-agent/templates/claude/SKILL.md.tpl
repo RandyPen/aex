@@ -20,7 +20,7 @@ When the user asks Claude to find or place a Polymarket order:
 1. Read `AGENT_MAX_ORDER_USD` from env. Refuse any order above this.
 2. Use `waap-cli whoami --json` to get the maker address.
 3. Construct the Polymarket order struct per the [Polymarket CLOB docs](https://docs.polymarket.com/).
-4. Sign with `waap-cli sign-typed-data --chain-id {{chainId}} --data '<json>' --json`.
+4. Sign with `waap-cli sign-typed-data --data '<json>' --json`.
 5. POST the signed order to `${POLYMARKET_API_URL}/order`.
 6. Report back the order ID and signature prefix.
 
