@@ -9,10 +9,12 @@ Runs on **Polygon** (chain id `137`).
 MVP templates paired with the canonical [Polymarket recipe](https://docs.waap.xyz/recipes/waap-cli-polymarket-agent).
 Templates will be expanded by [#383](https://github.com/holonym-foundation/internal-docs/issues/383) — this file tracks the current shape.
 
-## What you'll get
+## Supported runtimes
 
-- **Standalone runtime:** Node.js project with `agent.ts` that polls markets on a configurable interval, signs orders via `waap-cli sign-typed-data`, and submits via HTTP to the Polymarket CLOB.
-- **Claude runtime:** `SKILL.md` teaching Claude to interact with Polymarket via the WaaP CLI.
+- **Standalone** — Node.js project with `agent.ts` that polls markets on a configurable interval, signs orders via `waap-cli sign-typed-data`, and submits via HTTP to the Polymarket CLOB.
+- **Claude** — `SKILL.md` + `CLAUDE.md` + `mcp-config.json` teaching Claude Code to interact with Polymarket via the WaaP CLI.
+- **OpenClaw** — AgentSkills `SKILL.md` (open agentskills.io standard).
+- **Nous / Hermes** — AgentSkills `SKILL.md` (open agentskills.io standard).
 
 ## Env vars
 
