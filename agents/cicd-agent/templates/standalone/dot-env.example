@@ -30,3 +30,10 @@ TEST_SEND_AMOUNT_ETH=0.0001
 
 # Optional — Hex-encoded calldata for contract interaction test (default: 0x)
 TEST_CONTRACT_METHOD=0x
+
+# Optional — Watchdog / supervisor integration. The agent writes its PID on
+# startup so an external supervisor (systemd, monit, watchdog) can detect
+# liveness and restart on crash. Defaults to enabled to match the aex Hetzner
+# deployment pattern. Set to false for local dev if stale .pid files annoy.
+# WRITE_PID_FILE=true
+# PID_FILE=./agent.pid
