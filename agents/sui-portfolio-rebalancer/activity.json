@@ -9,7 +9,7 @@
   "category": "trading",
   "protocols": ["cetus"],
   "tags": ["trading", "rebalancer", "grid", "defi", "sui"],
-  "runtimes": ["standalone"],
+  "runtimes": ["claude", "standalone", "openclaw", "nous"],
   "envVars": [
     {
       "key": "TARGET_TOKEN_TYPE",

@@ -43,15 +43,21 @@ async function listActivities(): Promise<string[]> {
 }
 
 describe('registry coverage', () => {
-  it('ships 6 activities', async () => {
+  it('ships 12 activities', async () => {
     const activities = await listActivities()
     expect(activities.sort()).toEqual([
       'blank-project',
       'cetus-yield-agent',
+      'cicd-agent',
+      'evm-portfolio-rebalancer',
       'evm-uniswap-rebalancer',
       'morpho-yield-agent',
       'polymarket-agent',
-      'snapshot-agent'
+      'polymarket-arbitrage',
+      'polymarket-llm-analyst',
+      'recurring-payments',
+      'snapshot-agent',
+      'sui-portfolio-rebalancer'
     ])
   })
 
