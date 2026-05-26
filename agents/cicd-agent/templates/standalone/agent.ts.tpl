@@ -25,6 +25,14 @@ const TEST_TOKEN_ADDRESS = process.env.TEST_TOKEN_ADDRESS
 const TEST_SEND_AMOUNT_ETH = process.env.TEST_SEND_AMOUNT_ETH ?? '0.0001'
 const TEST_CONTRACT_METHOD = process.env.TEST_CONTRACT_METHOD ?? '0x'
 
+// Watchdog integration — writes a PID file on startup so external supervisors
+// (systemd Type=simple + a tailer, or a bash watchdog) can detect liveness.
+// Defaults to enabled to match the aex Hetzner deployment pattern. Set
+// WRITE_PID_FILE=false to opt out (e.g. local dev where stale .pid files
+// during crashes are annoying).
+const WRITE_PID_FILE = (process.env.WRITE_PID_FILE ?? 'true').toLowerCase() !== 'false'
+const PID_FILE = process.env.PID_FILE ?? path.join(process.cwd(), 'agent.pid')
+
 const GITHUB_API = 'https://api.github.com'
 
 if (!GITHUB_TOKEN) {
@@ -608,6 +616,18 @@ async function tick(address: string): Promise<void> {
 
 async function main(): Promise<void> {
   ensureLogDir()
+
+  // Write PID file on startup so a supervisor (systemd, monit, watchdog) can
+  // detect liveness. Cleanly unlinked on exit.
+  if (WRITE_PID_FILE) {
+    try {
+      fs.writeFileSync(PID_FILE, String(process.pid))
+      process.on('exit', () => { try { fs.unlinkSync(PID_FILE) } catch {} })
+      log('info', 'pid_file_written', { path: PID_FILE, pid: process.pid })
+    } catch (err) {
+      log('warn', 'pid_file_write_failed', { path: PID_FILE, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
 
   log('info', 'agent_start', {
     chainId: CHAIN_ID,
