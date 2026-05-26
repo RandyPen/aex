@@ -64,5 +64,12 @@ AGENT_DRY_RUN=1
 # Optional — log file (JSON-line). Defaults to <projectName>.log in cwd.
 # LOG_FILE=./agent.log
 
+# Watchdog / supervisor integration. The agent writes its PID on startup so an
+# external supervisor (systemd, monit, a bash watchdog) can detect liveness and
+# restart on crash. Defaults to enabled to match the aex Hetzner deployment
+# pattern. Set to false for local dev if you find stale .pid files annoying.
+# WRITE_PID_FILE=true
+# PID_FILE=./agent.pid
+
 # Optional — custom USDC address for balance snapshots when AGENT_ASSET=USDC
 # USDC_ADDRESS=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
