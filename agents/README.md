@@ -19,7 +19,6 @@ no raw private keys in the environment.
 | polymarket-llm-analyst | LLM-driven analysis | Polygon (Polymarket) | Production |
 | recurring-payments | Scheduled transfers | EVM (Base) | Production |
 | snapshot-agent | Governance voting | EVM | Production |
-| sui-cetus-yield | Yield optimization | Sui (Cetus) | Production |
 | sui-portfolio-rebalancer | Portfolio rebalancing | Sui | Production |
 
 ## Structure
