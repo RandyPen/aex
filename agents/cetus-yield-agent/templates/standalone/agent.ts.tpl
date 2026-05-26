@@ -7,16 +7,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 // -----------------------------------------------------------------------------
-// Alignment note — this template is the canonical TS form of the dogfood JS
-// agent currently running on the aex Hetzner host. Strategy parity is enforced
-// dimension-by-dimension as part of the agent-by-agent audit (Phase B per
-// products/waap/prd/aex/agent-runtime.md). The two implementations should stay
-// strategy-equivalent; differences are limited to:
-//   - TS resolves the WaaP address via `waap-cli whoami` (JS hardcodes it)
-//   - TS exposes USDC_OPEN_FRACTION / USDC_REOPEN_FRACTION / STARTUP_COOLDOWN_MS
-//     / YIELD_SCAN_INTERVAL as env knobs (JS hardcodes equivalents)
-//   - TS adds a monitor-mode simulation loop + graceful SIGTERM handling
-//   - TS adds a MAX_DEPOSIT_USD safety cap
+// Source of truth — this template is the canonical form of the cetus yield
+// agent. It is rendered into the live deployment on the aex Hetzner host by
+// deployments/sui-cetus-yield-prod/deploy.sh. The JS→TS migration of the
+// dogfood completed on 2026-05-07; the live host runs the rendered output of
+// this file (agent.ts under tsx), with no separate JS variant to keep in sync.
+// See products/waap/prd/aex/agent-runtime.md for deployment topology.
 // -----------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------
