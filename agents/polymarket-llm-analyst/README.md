@@ -2,6 +2,13 @@
 
 AI-driven prediction market trading agent that uses a Large Language Model (LLM) to analyze Polymarket questions and place bets based on confidence scores. Built on the WaaP (Wallet-as-a-Protocol) CLI for non-custodial key management.
 
+## Supported runtimes
+
+- Claude (SKILL.md + CLAUDE.md + MCP config)
+- Standalone (Node.js + Dockerfile)
+- OpenClaw (AgentSkills SKILL.md)
+- Nous / Hermes Agent (AgentSkills SKILL.md)
+
 ## How it works
 
 1. Polls the Polymarket Gamma API for active markets

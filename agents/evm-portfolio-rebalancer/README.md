@@ -2,6 +2,13 @@
 
 A WaaP-powered agent that monitors a token's price on Uniswap V3 and rebalances holdings when the price crosses configurable thresholds. Operates as a simple grid trading strategy: sell when price is high, buy when price is low, maintaining a target USD allocation.
 
+## Supported runtimes
+
+- Claude (SKILL.md + CLAUDE.md + MCP config)
+- Standalone (Node.js + Dockerfile)
+- OpenClaw (AgentSkills SKILL.md)
+- Nous / Hermes Agent (AgentSkills SKILL.md)
+
 ## Strategy
 
 The agent maintains a target USD allocation of a given token (e.g. $1,000 worth of WETH). Two price thresholds define the trading grid:

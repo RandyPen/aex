@@ -4,6 +4,13 @@ Automate recurring ERC-20 and native token payments on any EVM chain. Built on W
 
 Use cases: subscription payments, salary and payroll, recurring donations, DAO contributor payments, protocol fee distribution.
 
+## Supported runtimes
+
+- Claude (SKILL.md + CLAUDE.md + MCP config)
+- Standalone (Node.js + Dockerfile)
+- OpenClaw (AgentSkills SKILL.md)
+- Nous / Hermes Agent (AgentSkills SKILL.md)
+
 ## How It Works
 
 1. The agent reads a payment config JSON file that defines a list of scheduled payments.

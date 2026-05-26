@@ -4,6 +4,13 @@ Autonomous agent that scans Polymarket prediction markets for price discrepancie
 
 Runs on **Polygon** (chain id `137`).
 
+## Supported runtimes
+
+- Claude (SKILL.md + CLAUDE.md + MCP config)
+- Standalone (Node.js + Dockerfile)
+- OpenClaw (AgentSkills SKILL.md)
+- Nous / Hermes Agent (AgentSkills SKILL.md)
+
 ## How it works
 
 The agent runs two arbitrage detection strategies on each scan cycle:
