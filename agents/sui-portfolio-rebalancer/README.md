@@ -2,6 +2,13 @@
 
 Grid-trading style portfolio rebalancer running on **Sui mainnet** via **Cetus DEX**. The agent monitors a target token's price and executes swaps to maintain a target USD allocation when price crosses configurable thresholds.
 
+## Supported runtimes
+
+- Claude (SKILL.md + CLAUDE.md + MCP config)
+- Standalone (Node.js + Dockerfile)
+- OpenClaw (AgentSkills SKILL.md)
+- Nous / Hermes Agent (AgentSkills SKILL.md)
+
 ## Strategy
 
 The agent watches the price of a target token (e.g. SUI) denominated in a quote token (e.g. USDC) by reading the Cetus concentrated-liquidity pool's `sqrtPrice` on-chain.

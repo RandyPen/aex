@@ -4,6 +4,13 @@ An autonomous agent that runs real wallet integration tests against staging envi
 
 Runs on Base (chain ID 8453).
 
+## Supported runtimes
+
+- Claude (SKILL.md + CLAUDE.md + MCP config)
+- Standalone (Node.js + Dockerfile)
+- OpenClaw (AgentSkills SKILL.md)
+- Nous / Hermes Agent (AgentSkills SKILL.md)
+
 ## What It Does
 
 - **Detects new PRs** by polling GitHub repositories
