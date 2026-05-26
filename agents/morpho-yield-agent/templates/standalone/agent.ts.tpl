@@ -12,6 +12,7 @@ import {
 } from 'viem'
 import { mainnet, base, arbitrum, optimism, polygon, sepolia } from 'viem/chains'
 import fs from 'node:fs'
+import path from 'node:path'
 
 // -----------------------------------------------------------------------------
 // Config — see https://docs.wallet.human.tech/recipes/morpho-yield-optimizer
@@ -67,6 +68,14 @@ const WATCHED_VAULTS = (process.env.WATCHED_VAULTS ?? '')
 // Default ON. Going live requires AGENT_DRY_RUN=0 explicitly — anything else
 // (typo'd 'true', '0 ', missing, blank) keeps the agent in dry-run.
 const DRY_RUN = process.env.AGENT_DRY_RUN !== '0'
+
+// Watchdog integration — writes a PID file on startup so external supervisors
+// (systemd Type=simple + a tailer, or a bash watchdog) can detect liveness.
+// Defaults to enabled to match the aex Hetzner deployment pattern. Set
+// WRITE_PID_FILE=false to opt out (e.g. local dev where stale .pid files
+// during crashes are annoying).
+const WRITE_PID_FILE = (process.env.WRITE_PID_FILE ?? 'true').toLowerCase() !== 'false'
+const PID_FILE = process.env.PID_FILE ?? path.join(process.cwd(), 'agent.pid')
 
 if (!ASSET || !/^0x[0-9a-fA-F]{40}$/.test(ASSET)) {
   console.error(`${TAG} AGENT_ASSET (or ASSET_ADDRESS) must be a valid ERC-20 address`)
@@ -809,6 +818,18 @@ async function main(): Promise<void> {
     watchedVaults: WATCHED_VAULTS.length || 'auto (filter by asset)',
     owner,
   })
+
+  // Write PID file before installing signal handlers so a supervisor that
+  // SIGTERMs us early during startup still sees us as alive.
+  if (WRITE_PID_FILE) {
+    try {
+      fs.writeFileSync(PID_FILE, String(process.pid))
+      process.on('exit', () => { try { fs.unlinkSync(PID_FILE) } catch {} })
+      log('info', 'pid_file_written', { path: PID_FILE, pid: process.pid })
+    } catch (err) {
+      log('warn', 'pid_file_write_failed', { path: PID_FILE, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
 
   for (const sig of ['SIGTERM', 'SIGINT'] as const) {
     process.on(sig, () => {
