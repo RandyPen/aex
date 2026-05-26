@@ -9,7 +9,7 @@
   "category": "trading",
   "protocols": ["uniswap-v3"],
   "tags": ["grid-trading", "rebalancer", "evm", "defi", "uniswap"],
-  "runtimes": ["claude", "standalone"],
+  "runtimes": ["claude", "standalone", "openclaw", "nous"],
   "envVars": [
     {
       "key": "TARGET_TOKEN",

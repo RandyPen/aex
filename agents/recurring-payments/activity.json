@@ -9,7 +9,7 @@
   "category": "other",
   "protocols": ["erc20"],
   "tags": ["payments", "recurring", "payroll", "subscriptions", "evm"],
-  "runtimes": ["standalone"],
+  "runtimes": ["claude", "standalone", "openclaw", "nous"],
   "envVars": [
     {
       "key": "PAYMENT_CONFIG_PATH",
