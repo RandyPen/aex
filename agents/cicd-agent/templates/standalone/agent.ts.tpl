@@ -35,8 +35,18 @@ const PID_FILE = process.env.PID_FILE ?? path.join(process.cwd(), 'agent.pid')
 
 const GITHUB_API = 'https://api.github.com'
 
-if (!GITHUB_TOKEN) {
-  console.error(`${TAG} GITHUB_TOKEN is required`)
+// TAP credential proxy — when configured, GitHub API calls route through TAP
+// using `X-TAP-Credential: ${GITHUB_TAP_CREDENTIAL}` instead of carrying a raw
+// GITHUB_TOKEN in env. Falls back to direct api.github.com with GITHUB_TOKEN
+// when any of the three TAP env vars is missing (preserves the original local
+// dev / non-TAP deployment path for external users of this template).
+const TAP_PROXY_URL = process.env.TAP_PROXY_URL?.replace(/\/$/, '')
+const TAP_AGENT_KEY = process.env.TAP_AGENT_KEY
+const GITHUB_TAP_CREDENTIAL = process.env.GITHUB_TAP_CREDENTIAL
+const USE_TAP_FOR_GITHUB = Boolean(TAP_PROXY_URL && TAP_AGENT_KEY && GITHUB_TAP_CREDENTIAL)
+
+if (!USE_TAP_FOR_GITHUB && !GITHUB_TOKEN) {
+  console.error(`${TAG} GitHub auth missing: set either GITHUB_TOKEN, or all of TAP_PROXY_URL + TAP_AGENT_KEY + GITHUB_TAP_CREDENTIAL`)
   process.exit(1)
 }
 
@@ -332,29 +342,60 @@ function formatTestResults(results: TestResult[], prNumber: number): string {
 // GitHub API helpers
 // ---------------------------------------------------------------------------
 
-async function githubGet<T>(endpoint: string): Promise<T> {
-  const res = await request(`${GITHUB_API}${endpoint}`, {
+// Build the auth + routing headers for a GitHub request. When TAP is
+// configured: target the proxy /forward endpoint and let TAP inject the
+// credential. Custom upstream headers (Accept, User-Agent, X-GitHub-Api-Version,
+// Content-Type) pass through verbatim. When TAP is not configured: hit
+// api.github.com directly with the bare GITHUB_TOKEN.
+function buildGithubRequest(
+  endpoint: string,
+  method: 'GET' | 'POST',
+  bodyJson?: string,
+): { url: string; headers: Record<string, string> } {
+  const upstreamUrl = `${GITHUB_API}${endpoint}`
+  const upstreamHeaders: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': AGENT_ID,
+    'X-GitHub-Api-Version': '2022-11-28',
+  }
+  if (method === 'POST' && bodyJson !== undefined) {
+    upstreamHeaders['Content-Type'] = 'application/json'
+  }
+
+  if (USE_TAP_FOR_GITHUB) {
+    return {
+      url: `${TAP_PROXY_URL}/forward`,
+      headers: {
+        ...upstreamHeaders,
+        'X-TAP-Key': TAP_AGENT_KEY!,
+        'X-TAP-Credential': GITHUB_TAP_CREDENTIAL!,
+        'X-TAP-Target': upstreamUrl,
+        'X-TAP-Method': method,
+      },
+    }
+  }
+  return {
+    url: upstreamUrl,
     headers: {
+      ...upstreamHeaders,
       Authorization: `Bearer ${GITHUB_TOKEN}`,
-      Accept: 'application/vnd.github+json',
-      'User-Agent': AGENT_ID,
-      'X-GitHub-Api-Version': '2022-11-28',
     },
-  })
+  }
+}
+
+async function githubGet<T>(endpoint: string): Promise<T> {
+  const { url, headers } = buildGithubRequest(endpoint, 'GET')
+  const res = await request(url, { headers })
   return (await res.body.json()) as T
 }
 
 async function githubPost(endpoint: string, body: unknown): Promise<{ statusCode: number; data: unknown }> {
-  const res = await request(`${GITHUB_API}${endpoint}`, {
+  const bodyJson = JSON.stringify(body)
+  const { url, headers } = buildGithubRequest(endpoint, 'POST', bodyJson)
+  const res = await request(url, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${GITHUB_TOKEN}`,
-      Accept: 'application/vnd.github+json',
-      'Content-Type': 'application/json',
-      'User-Agent': AGENT_ID,
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-    body: JSON.stringify(body),
+    headers,
+    body: bodyJson,
   })
   const data = await res.body.json()
   return { statusCode: res.statusCode, data }

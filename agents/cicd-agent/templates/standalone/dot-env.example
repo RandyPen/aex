@@ -1,5 +1,15 @@
-# Required — GitHub personal access token (needs repo + actions scopes)
-GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# GitHub auth — pick ONE path:
+#
+# Path A (direct, simplest): personal access token with repo + actions scopes.
+# Lives in this .env file as plaintext. Fine for local dev or non-TAP deploys.
+# GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+#
+# Path B (proxied via TAP, preferred when TAP is available): the token never
+# touches this file. All three of TAP_PROXY_URL, TAP_AGENT_KEY, and
+# GITHUB_TAP_CREDENTIAL must be set for the agent to switch into TAP mode.
+# TAP_PROXY_URL=https://tap.example.com
+# TAP_AGENT_KEY=
+# GITHUB_TAP_CREDENTIAL=github-test-waap-aex
 
 # Required — Comma-separated repos to monitor
 GITHUB_REPOS=owner/repo1,owner/repo2
