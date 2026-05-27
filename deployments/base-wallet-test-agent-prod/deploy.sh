@@ -32,7 +32,11 @@ mkdir -p /tmp/wallet-test-agent-deploy
 
 PROJECT_NAME="base-wallet-test-agent"
 PROJECT_PKG_NAME="base-wallet-test-agent"
-CHAIN_ID="8453"
+# Chain the agent runs its wallet-integration tests against. Default is Base
+# mainnet (8453); override with `CHAIN_ID=<id> ./deploy.sh` when re-targeting
+# the agent at a different test environment (e.g. CHAIN_ID=11155420 for
+# Optimism Sepolia when pointed at app.staging.passport.xyz).
+CHAIN_ID="${CHAIN_ID:-8453}"
 
 sed "s/{{projectName}}/$PROJECT_NAME/g; s/{{chainId}}/$CHAIN_ID/g" \
   "$TEMPLATE_DIR/agent.ts.tpl" > /tmp/wallet-test-agent-deploy/agent.ts
