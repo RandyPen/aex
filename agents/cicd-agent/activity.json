@@ -73,7 +73,7 @@
     }
   ],
   "waapFeatures": ["send-tx", "sign-message", "policy"],
-  "recipeUrl": "https://docs.waap.xyz/recipes/cicd-agent",
+  "recipeUrl": "https://docs.wallet.human.tech/recipes/cicd-agent",
   "minCliVersion": "0.0.1",
   "eip8004": {
     "supportedTrust": ["tee-attestation", "reputation"],

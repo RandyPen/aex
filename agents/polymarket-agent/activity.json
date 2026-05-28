@@ -50,7 +50,7 @@
     }
   ],
   "waapFeatures": ["sign-typed-data", "send-tx", "policy"],
-  "recipeUrl": "https://docs.waap.xyz/recipes/waap-cli-polymarket-agent",
+  "recipeUrl": "https://docs.wallet.human.tech/recipes/polymarket-agent",
   "minCliVersion": "0.0.1",
   "eip8004": {
     "supportedTrust": ["tee-attestation", "reputation"],

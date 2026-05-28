@@ -48,7 +48,7 @@
     }
   ],
   "waapFeatures": ["send-tx", "policy"],
-  "recipeUrl": "https://docs.waap.xyz/recipes/recurring-payments-agent",
+  "recipeUrl": "https://docs.wallet.human.tech/recipes/recurring-payments",
   "minCliVersion": "0.0.1",
   "eip8004": {
     "supportedTrust": ["tee-attestation", "reputation"],

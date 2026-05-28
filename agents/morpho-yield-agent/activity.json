@@ -46,7 +46,7 @@
     }
   ],
   "waapFeatures": ["sign-typed-data", "send-tx", "policy"],
-  "recipeUrl": "https://docs.waap.xyz/recipes/waap-cli-morpho-yield-agent",
+  "recipeUrl": "https://docs.wallet.human.tech/recipes/morpho-yield-agent",
   "minCliVersion": "0.0.1",
   "eip8004": {
     "supportedTrust": ["tee-attestation", "reputation"],
