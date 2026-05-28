@@ -89,7 +89,7 @@
     }
   ],
   "waapFeatures": ["send-tx", "policy"],
-  "recipeUrl": "https://docs.waap.xyz/recipes/evm-portfolio-rebalancer",
+  "recipeUrl": "https://docs.wallet.human.tech/recipes/evm-portfolio-rebalancer",
   "minCliVersion": "0.0.1",
   "eip8004": {
     "supportedTrust": ["tee-attestation", "reputation"],

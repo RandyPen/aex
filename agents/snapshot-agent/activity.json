@@ -54,7 +54,7 @@
     }
   ],
   "waapFeatures": ["sign-typed-data"],
-  "recipeUrl": "https://docs.waap.xyz/recipes/waap-cli-snapshot-agent",
+  "recipeUrl": "https://docs.wallet.human.tech/recipes/snapshot-agent",
   "minCliVersion": "0.0.1",
   "eip8004": {
     "supportedTrust": ["tee-attestation", "reputation"],

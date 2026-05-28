@@ -72,7 +72,7 @@
     }
   ],
   "waapFeatures": ["sign-typed-data", "send-tx", "policy"],
-  "recipeUrl": "https://docs.waap.xyz/recipes/waap-cli-polymarket-llm-analyst",
+  "recipeUrl": "https://docs.wallet.human.tech/recipes/polymarket-llm-analyst",
   "minCliVersion": "0.0.1",
   "eip8004": {
     "supportedTrust": ["tee-attestation", "reputation"],
