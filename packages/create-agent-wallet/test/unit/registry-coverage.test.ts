@@ -31,8 +31,10 @@ const REQUIRED_FILES_PER_RUNTIME: Record<string, string[]> = {
 async function listActivities(): Promise<string[]> {
   const entries = await readdir(REGISTRY, { withFileTypes: true })
   const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name)
-  // Only include directories that have activity.json (filters out non-activity dirs
-  // like sui-cetus-yield in the monorepo agents/ directory).
+  // Only include directories that have activity.json. The agents/ directory is
+  // strictly templates after the 2026-05-07 JS→TS migration, but this guard is
+  // retained so future non-activity directories (READMEs, shared utilities) can
+  // coexist without breaking the suite.
   const activities: string[] = []
   for (const d of dirs) {
     if (existsSync(resolve(REGISTRY, d, 'activity.json'))) {
