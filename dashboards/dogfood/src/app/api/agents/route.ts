@@ -5,8 +5,6 @@ import { agents as mockAgents } from "@/lib/mock-data";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const CETUS_AGENT_IDS = ["cetus-yield-agent", "sui-cetus-yield"];
-
 export async function GET() {
   if (!HAS_DB) {
     return NextResponse.json({ agents: mockAgents });
@@ -16,14 +14,13 @@ export async function GET() {
     return NextResponse.json({ agents: mockAgents });
   }
 
-  // Scope to the two Cetus AEX agents (plus any future agent tagged with protocol = 'cetus')
+  // Pull all registered agents + their latest event timestamp for status inference
   const r = await pool.query(`
     SELECT
       a.id, a.name, a.description, a.chain, a.protocol, a.category,
       a.wallet_address, a.metadata, a.started_at,
       (SELECT MAX(ts) FROM agent_events WHERE agent_id = a.id) AS last_event_ts
     FROM agents a
-    WHERE a.id IN ('cetus-yield-agent','sui-cetus-yield') OR a.protocol = 'cetus'
     ORDER BY a.id
   `);
 
@@ -58,11 +55,6 @@ export async function PUT(req: Request) {
   const body = await req.json();
   const { id, name, description, chain, protocol, category, walletAddress } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-
-  // Same id-scoped guard: only allow updates to the Cetus agents this dashboard owns
-  if (!CETUS_AGENT_IDS.includes(id)) {
-    return NextResponse.json({ error: "agent not in scope of this dashboard" }, { status: 403 });
-  }
 
   await pool.query(
     `UPDATE agents SET

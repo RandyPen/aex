@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Cetus Yield Agent Dashboard",
-  description: "Live monitoring for AEX agents running on Cetus Protocol (Sui)",
+  title: "AEX Dogfood Dashboard",
+  description: "Agent Exchange dogfood agent monitoring dashboard",
 };
 
 export default function RootLayout({

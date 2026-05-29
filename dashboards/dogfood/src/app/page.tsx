@@ -48,12 +48,11 @@ export default function Landing() {
     <div className="container" style={{ paddingTop: "var(--space-6xl)", paddingBottom: "var(--space-10xl)" }}>
       <header style={{ marginBottom: "var(--space-6xl)" }}>
         <h1 style={{ fontSize: "var(--font-size-h3)", fontWeight: "var(--font-weight-semi)", marginBottom: "var(--space-md)" }}>
-          Cetus Yield Agents
+          Agent Exchange
         </h1>
         <p style={{ color: "var(--color-text-40)", fontSize: "var(--font-size-text-md)", maxWidth: "640px", lineHeight: 1.55 }}>
-          Live monitoring for AEX agents running concentrated-liquidity yield strategies on Cetus
-          Protocol (Sui). Each agent holds a wallet, takes a position in a Cetus CLMM pool, and
-          reports live performance back here.
+          Discovery and monitoring surface for the AI agents Holonym Foundation runs on its own infrastructure.
+          Each agent below holds a wallet, takes positions on-chain, and reports live performance back here.
         </p>
       </header>
 
@@ -69,7 +68,7 @@ export default function Landing() {
 
       {agents && agents.length === 0 && (
         <div className="card">
-          <p style={{ color: "var(--color-text-40)" }}>No Cetus agents registered yet.</p>
+          <p style={{ color: "var(--color-text-40)" }}>No agents registered yet.</p>
         </div>
       )}
 
