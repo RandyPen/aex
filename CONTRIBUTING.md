@@ -11,6 +11,27 @@ Thanks for considering a contribution. AEX is human.tech's open Agent Exchange â
 5. **Open a pull request** referencing the issue. Include enough context that a reviewer can verify the change without re-deriving the reasoning.
 6. **Respond to review feedback.** We aim to triage PRs within 5 business days.
 
+## Local setup: pre-commit security review
+
+This repo ships a tracked pre-commit hook in `.githooks/` that runs a best-effort
+security review of your staged changes (looking for leaked secrets, injection,
+authz bypasses, and similar) before each commit. Git does not enable tracked
+hooks automatically, so **run this once** after cloning:
+
+```
+git config core.hooksPath .githooks
+```
+
+This points git at `.githooks/` for all hooks in this repo. The review covers
+both manual commits and commits made by coding agents, since git runs the hook
+regardless of who invokes `git commit`.
+
+Notes:
+
+- The reviewer uses the [`claude`](https://docs.claude.com/en/docs/claude-code) CLI. If it isn't installed, the hook **fails open** (skips the review) rather than blocking you.
+- It's a best-effort local gate, not an enforcement boundary â€” override a false positive with `git commit --no-verify`. The authoritative checks run in CI on the PR.
+- Default review model is `claude-sonnet-4-6`; set `COMMIT_REVIEW_MODEL=claude-opus-4-8` for a stricter, slower review.
+
 ## Developer Certificate of Origin (DCO)
 
 We use the [Developer Certificate of Origin](https://developercertificate.org/) instead of a Contributor License Agreement. Every commit must include a `Signed-off-by:` line:

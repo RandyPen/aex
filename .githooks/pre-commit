@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#
+# Tracked pre-commit hook (enabled via `git config core.hooksPath .githooks`;
+# see CONTRIBUTING.md). Runs a best-effort security review of the staged changes
+# before every commit — covering both manual commits and commits made by
+# coding agents, since git runs this hook regardless of who invokes `git commit`.
+#
+# git stages `git commit -a` changes into the index before this hook runs, so
+# `git diff --cached` is always the exact tree being committed.
+#
+# Override a false positive with: git commit --no-verify
+
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+reviewer="$root/.githooks/security-review.sh"
+
+[ -x "$reviewer" ] || exit 0
+
+if git diff --cached | bash "$reviewer"; then
+  exit 0
+else
+  echo "Commit aborted by security review. Fix the issue, or use 'git commit --no-verify' to override." >&2
+  exit 1
+fi
