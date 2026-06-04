@@ -8,12 +8,12 @@ npx @human.tech/create-agent-wallet
 
 Interactive prompts pick an **Activity** (what the agent does), a **runtime** (Claude, Standalone, OpenClaw, or Nous/Hermes Agent), and a **project name**. The generator stamps out a working project — you `cd` in, copy `.env.example`, and run.
 
-Part of the [Agentic Wallet Marketplace](https://github.com/holonym-foundation/internal-docs/issues/368).
+Part of the [Agent Exchange (AEX)](https://github.com/holonym-foundation/aex).
 
 ## Features
 
 - **4 runtimes:** Claude (SKILL.md + CLAUDE.md + MCP config), Standalone (Node.js + Dockerfile), OpenClaw (AgentSkills SKILL.md), and Nous / Hermes Agent (AgentSkills SKILL.md). OpenClaw + Nous share the [AgentSkills open standard](https://agentskills.io/) so the same SKILL.md works across both (and any other AgentSkills-compatible runtime).
-- **Curated Activity registry:** 6 launch templates — Polymarket, Snapshot, Cetus Yield, Morpho Yield, EVM Uniswap Rebalancer, Blank Project.
+- **Curated Activity registry:** 11 launch templates plus a Blank Project scaffold — Polymarket Signal Trader, Polymarket Arbitrage, Polymarket LLM Analyst, Snapshot Governance, Cetus Yield, Morpho Yield, EVM Uniswap Rebalancer, EVM Portfolio Rebalancer, Sui Portfolio Rebalancer, Recurring Payments, CI/CD Agent.
 - **Session bootstrapping:** detects `~/.waap-cli/session.json`; prompts inline if absent.
 - **Non-interactive mode:** full flag-based usage for CI / agent orchestration.
 - **Offline-capable:** bundled registry fallback if `docs.waap.xyz` is unreachable.
@@ -70,14 +70,15 @@ npx @human.tech/create-agent-wallet \
 
 ```
 my-agent/
-├── package.json       pnpm/npm ready, tsx + execa
-├── agent.ts           your loop — shells out to waap-cli
-├── Dockerfile         production container
-├── docker-compose.yml mounts ~/.waap-cli into the container
+├── package.json              pnpm/npm ready, tsx + execa
+├── agent.ts                  your loop — shells out to waap-cli
+├── Dockerfile                production container
 ├── tsconfig.json
-├── .env.example       activity-specific env vars
+├── .env.example              activity-specific env vars
 ├── .gitignore
-└── README.md          run instructions
+├── README.md                 run instructions
+├── agent-registration.json   EIP-8004 registration file
+└── .well-known/              served alongside the agent for domain-control verification
 ```
 
 ### Claude runtime
@@ -154,4 +155,4 @@ See [docs/plans/002-create-agent-wallet-cli-design-plan-2026-04-20.md](../../doc
 
 ## License
 
-MIT
+Apache-2.0 — see [LICENSE](../../LICENSE).

@@ -1,0 +1,47 @@
+name: Publish @human.tech/create-agent-wallet
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write  # required for npm trusted-publisher OIDC
+  contents: read
+
+defaults:
+  run:
+    working-directory: packages/create-agent-wallet
+
+jobs:
+  publish_preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          registry-url: https://registry.npmjs.org/
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish --dry-run
+
+  publish_confirm:
+    name: Review Before Publishing
+    needs: [publish_preview]
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - name: Approve Publish to NPM (check preview step)
+        run: echo "Waiting for approval"
+
+  publish:
+    needs: [publish_confirm]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          registry-url: https://registry.npmjs.org/
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish --access public
