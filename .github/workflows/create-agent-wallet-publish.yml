@@ -7,13 +7,12 @@ permissions:
   id-token: write  # required for npm trusted-publisher OIDC
   contents: read
 
-defaults:
-  run:
-    working-directory: packages/create-agent-wallet
-
 jobs:
   publish_preview:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/create-agent-wallet
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,6 +35,9 @@ jobs:
   publish:
     needs: [publish_confirm]
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/create-agent-wallet
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
