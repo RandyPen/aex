@@ -35,6 +35,7 @@ jobs:
   publish:
     needs: [publish_confirm]
     runs-on: ubuntu-latest
+    environment: npm
     defaults:
       run:
         working-directory: packages/create-agent-wallet
