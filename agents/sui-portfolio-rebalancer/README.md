@@ -23,6 +23,84 @@ This is a classic grid / mean-reversion approach: sell into strength, buy into w
 
 Cetus is the primary concentrated-liquidity DEX on Sui. The agent reads pool state (sqrtPrice) via the Cetus CLMM SDK for price monitoring, then uses the **Cetus aggregator** to find the optimal swap route when a rebalance is triggered. The aggregator searches across all available Cetus pools and may split orders across multiple pools for better execution than a single direct pool swap. Transactions are signed and submitted through `waap-cli send-tx` (non-custodial 2-party computation -- no raw private key in the environment).
 
+## Anatomy of `send-tx` (2PC signing)
+
+This template never holds the agent's private key. Signing is split across **two parties** -- the agent process (this code) and the WaaP server (a remote co-signer) -- using a 2-party threshold-ECDSA (2PC-MPC) scheme. Neither side can sign alone.
+
+### Data flow
+
+```
++-------------------+        +-------------------+        +---------------+
+|  agent process    |        |  waap-cli         |        |  WaaP server  |
+|  (this template)  |        |  (local CLI)      |        |  (co-signer)  |
++-------------------+        +-------------------+        +---------------+
+        |                            |                            |
+        | 1. build PTB               |                            |
+        |    via @mysten/sui         |                            |
+        |    + cetus aggregator      |                            |
+        |                            |                            |
+        | 2. tx.build({ client })    |                            |
+        |    -> raw tx bytes (b64)   |                            |
+        |                            |                            |
+        | 3. spawn `waap-cli         |                            |
+        |    send-tx --tx-bytes ...` |                            |
+        | -------------------------->|                            |
+        |                            | 4. auth with local         |
+        |                            |    session token           |
+        |                            | -------------------------->|
+        |                            |                            |
+        |                            | 5. 2PC signing protocol    |
+        |                            |    (multi-round)           |
+        |                            | <-------- rounds --------> |
+        |                            |                            |
+        |                            | 6. assemble final          |
+        |                            |    signature locally       |
+        |                            |                            |
+        |                            | 7. submit signed tx        |
+        |                            |    to Sui fullnode         |
+        |                            | ---> (Sui RPC) --->        |
+        |                            |                            |
+        | 8. JSON result on stdout   |                            |
+        |    { event:"result",       |                            |
+        |      txHash, ... }         |                            |
+        | <--------------------------|                            |
+        |                            |                            |
+        | 9. agent calls             |                            |
+        |    sui.waitForTransaction  |                            |
+        |    to confirm on-chain     |                            |
+        |                            |                            |
+```
+
+Key points:
+
+- **The agent never sees a raw private key.** The key share lives inside `~/.waap-cli/` (encrypted at rest); the matching share lives on the WaaP server. Neither share alone can produce a valid signature.
+- **What crosses the process boundary is base64-encoded tx bytes** -- the exact serialized PTB that the Sui fullnode will execute. Nothing about strategy, balances, or env vars leaves the agent process.
+- **The CLI is the auth boundary.** `waap-cli signup` / `login` provisions the local share + session token. The agent inherits whatever session the CLI has -- no extra config.
+- **TEE attestation** (declared in `activity.json` under `eip8004.supportedTrust`) lets the server prove it's running unmodified co-signer code inside a trusted enclave. Clients that verify the attestation get a stronger guarantee that the server-side share isn't being exfiltrated.
+
+### Why a subprocess instead of an SDK call
+
+This template shells out to `waap-cli` (via `execa`) rather than calling a WaaP SDK directly. Pros:
+
+- Zero key material in the agent's address space.
+- The CLI handles session refresh, retry, and protocol upgrades on its own release cadence.
+- Trivial to swap in any other 2PC / MPC backend that exposes a "give me bytes, get back a digest" CLI.
+
+If you're writing your own integration and want to skip the subprocess, look for `@human.tech/waap-sdk` -- the equivalent in code is roughly:
+
+```ts
+// pseudocode -- check the published SDK for the actual API surface
+import { WaapClient } from '@human.tech/waap-sdk'
+const waap = await WaapClient.fromLocalSession()           // reads ~/.waap-cli/
+const txBytes = await tx.build({ client: sui })            // same Transaction object
+const { digest } = await waap.signAndSendTx({              // 2PC happens inside
+  chain: 'sui:mainnet',
+  txBytes,
+})
+```
+
+The contract is the same: hand over bytes, get back a digest.
+
 ## Example: SUI/USDC rebalancing
 
 Suppose you hold SUI and USDC, and you want to keep roughly $500 in SUI at all times:

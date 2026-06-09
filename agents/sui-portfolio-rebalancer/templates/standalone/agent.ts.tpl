@@ -127,6 +127,38 @@ async function signAndSendTx(b64TxBytes: string): Promise<string | null> {
   }
 }
 
+interface ConfirmResult {
+  digest: string
+  amountOutRaw: bigint | null
+  errorMessage: string | null
+}
+
+// Wait for the fullnode to execute the tx, surface failures loudly, and pick
+// out the agent's positive balance change for the output coin -- that is the
+// real amount received (post-slippage, post-routing).
+async function confirmTx(digest: string, owner: string, outCoinType: string): Promise<ConfirmResult> {
+  const r = await sui.waitForTransaction({
+    digest,
+    options: { showEffects: true, showBalanceChanges: true },
+    timeout: 60_000,
+  })
+  const status = r.effects?.status?.status
+  if (status !== 'success') {
+    throw new Error(`tx ${digest} failed on-chain: ${r.effects?.status?.error ?? 'unknown error'}`)
+  }
+  const wantOwner = normalizeAddress(owner)
+  const wantCoin = normalizeCoinType(outCoinType)
+  let amountOutRaw: bigint | null = null
+  for (const bc of r.balanceChanges ?? []) {
+    const ownerField = bc.owner as { AddressOwner?: string } | undefined
+    if (!ownerField?.AddressOwner || normalizeAddress(ownerField.AddressOwner) !== wantOwner) continue
+    if (normalizeCoinType(bc.coinType) !== wantCoin) continue
+    const amt = BigInt(bc.amount)
+    if (amt > BigInt(0)) { amountOutRaw = amt; break }
+  }
+  return { digest, amountOutRaw, errorMessage: null }
+}
+
 // -----------------------------------------------------------------------------
 // Sui + Cetus clients
 // -----------------------------------------------------------------------------
@@ -143,6 +175,48 @@ const aggregator = new AggregatorClient({
 })
 
 // -----------------------------------------------------------------------------
+// Coin-type helpers: decimals cache + canonical-form comparison
+// -----------------------------------------------------------------------------
+
+// Sui types can be written with short or padded package addresses
+// (`0x2::sui::SUI` vs `0x0000...0002::sui::SUI`). Comparisons must use the
+// padded canonical form, otherwise a pool's `coinTypeA` will never match the
+// user-supplied `TARGET_TOKEN_TYPE` env var.
+function normalizeAddress(a: string): string {
+  if (!a.startsWith('0x')) return a
+  return '0x' + a.slice(2).toLowerCase().padStart(64, '0')
+}
+
+function normalizeCoinType(t: string): string {
+  const parts = t.split('::')
+  if (parts.length !== 3 || !parts[0].startsWith('0x')) return t
+  return `${normalizeAddress(parts[0])}::${parts[1]}::${parts[2]}`
+}
+
+// Resolved once per coin type at startup -- avoids per-tick RPC calls and
+// per-coin guesswork. Keyed by the normalized type so lookups survive whatever
+// address form the pool / env vars use.
+const decimalsCache = new Map<string, number>()
+
+async function loadDecimals(coinType: string): Promise<number> {
+  const key = normalizeCoinType(coinType)
+  const cached = decimalsCache.get(key)
+  if (cached !== undefined) return cached
+  const meta = await sui.getCoinMetadata({ coinType })
+  if (!meta || typeof meta.decimals !== 'number') {
+    throw new Error(`getCoinMetadata returned no decimals for ${coinType}`)
+  }
+  decimalsCache.set(key, meta.decimals)
+  return meta.decimals
+}
+
+function getCachedDecimals(coinType: string): number {
+  const d = decimalsCache.get(normalizeCoinType(coinType))
+  if (d === undefined) throw new Error(`decimals not preloaded for ${coinType}`)
+  return d
+}
+
+// -----------------------------------------------------------------------------
 // Pool state and price calculation
 // -----------------------------------------------------------------------------
 
@@ -156,36 +230,48 @@ interface PoolState {
 
 async function getPoolState(): Promise<PoolState> {
   const pool = await cetus.Pool.getPool(CETUS_POOL_ID!) as Record<string, unknown>
+  const coinTypeA = String(pool.coinTypeA ?? '')
+  const coinTypeB = String(pool.coinTypeB ?? '')
+  // Cache populates at startup, but warm it here too so any pool we read works
+  // even if the env vars and the pool disagree on which side is A/B.
+  const [decimalsA, decimalsB] = await Promise.all([
+    loadDecimals(coinTypeA),
+    loadDecimals(coinTypeB),
+  ])
   return {
     currentSqrtPrice: String(pool.current_sqrt_price ?? '0'),
-    coinTypeA: String(pool.coinTypeA ?? ''),
-    coinTypeB: String(pool.coinTypeB ?? ''),
-    decimalsA: Number(pool.decimalsA ?? pool.coinAmountA !== undefined ? 9 : 9),
-    decimalsB: Number(pool.decimalsB ?? pool.coinAmountB !== undefined ? 6 : 6),
+    coinTypeA,
+    coinTypeB,
+    decimalsA,
+    decimalsB,
   }
 }
 
+// Q64.64 fixed-point math is done entirely in BigInt to avoid Number truncation
+// on the u256 intermediate (sqrtPriceX64^2 can be ~2^256). The result is scaled
+// down by PRICE_SCALE before the final Number conversion so even pools where
+// rawPrice is in the hundreds stay well within Number.MAX_SAFE_INTEGER.
+const PRICE_SCALE_EXP = 12
+const PRICE_SCALE = BigInt(10) ** BigInt(PRICE_SCALE_EXP)
+const Q128 = BigInt(1) << BigInt(128)
+
 /**
- * Calculate the human-readable price of coinA in terms of coinB from the pool's
- * sqrtPriceX64. Cetus stores sqrt(price) * 2^64 as a u128.
+ * Human-readable price of TARGET in QUOTE, derived from the pool's sqrtPriceX64.
  *
- * price = (sqrtPriceX64 / 2^64)^2 * 10^(decimalsA - decimalsB)
+ *   rawPrice (B-per-A in smallest units) = (sqrtPriceX64 / 2^64)^2
+ *   priceAinB (human)                    = rawPrice * 10^(decimalsA - decimalsB)
  *
- * If the target token is coinA, this gives the price directly.
- * If the target token is coinB, we invert.
+ * If TARGET is coinB, we invert.
  */
 function calculatePrice(pool: PoolState): number {
   const sqrtPriceX64 = BigInt(pool.currentSqrtPrice)
-  const Q64 = BigInt(1) << BigInt(64)
-
-  // price = (sqrtPriceX64^2) / (2^128) * 10^(decimalsA - decimalsB)
-  const sqrtSquared = sqrtPriceX64 * sqrtPriceX64
-  const shifted = Number(sqrtSquared) / Number(Q64 * Q64)
+  const sqrtSquared = sqrtPriceX64 * sqrtPriceX64                  // = rawPrice * 2^128
+  const scaledRaw = (sqrtSquared * PRICE_SCALE) / Q128              // = rawPrice * 10^PRICE_SCALE_EXP
+  const rawPrice = Number(scaledRaw) / Number(PRICE_SCALE)
   const decimalAdjustment = Math.pow(10, pool.decimalsA - pool.decimalsB)
-  const priceAinB = shifted * decimalAdjustment
+  const priceAinB = rawPrice * decimalAdjustment
 
-  // Determine if target token is coinA or coinB
-  const targetIsA = pool.coinTypeA.includes(TARGET_TOKEN_TYPE!.split('::').pop()!)
+  const targetIsA = normalizeCoinType(pool.coinTypeA) === normalizeCoinType(TARGET_TOKEN_TYPE!)
   return targetIsA ? priceAinB : (priceAinB > 0 ? 1 / priceAinB : 0)
 }
 
@@ -193,17 +279,9 @@ function calculatePrice(pool: PoolState): number {
 // Balance reads
 // -----------------------------------------------------------------------------
 
-async function getTokenBalance(owner: string, coinType: string, decimals: number): Promise<number> {
+async function getTokenBalance(owner: string, coinType: string): Promise<number> {
   const r = await sui.getBalance({ owner, coinType })
-  return Number(r.totalBalance) / Math.pow(10, decimals)
-}
-
-// Determine decimals for a coin type. SUI = 9, most stablecoins = 6.
-function guessDecimals(coinType: string): number {
-  const lower = coinType.toLowerCase()
-  if (lower.includes('::sui::') || lower === '0x2::sui::sui') return 9
-  if (lower.includes('usdc') || lower.includes('usdt')) return 6
-  return 9 // default to 9 for unknown Sui tokens
+  return Number(r.totalBalance) / Math.pow(10, getCachedDecimals(coinType))
 }
 
 // -----------------------------------------------------------------------------
@@ -211,15 +289,21 @@ function guessDecimals(coinType: string): number {
 // execution price instead of routing through a single pool directly.
 // -----------------------------------------------------------------------------
 
+interface SwapResult {
+  digest: string | null
+  amountOutRaw: bigint | null
+  amountOutHuman: number | null
+}
+
 async function executeSwap(
   owner: string,
   pool: PoolState,
   direction: 'buy' | 'sell',
   amountUsd: number,
   currentPrice: number,
-): Promise<string | null> {
-  const targetDecimals = guessDecimals(TARGET_TOKEN_TYPE!)
-  const quoteDecimals = guessDecimals(QUOTE_TOKEN_TYPE!)
+): Promise<SwapResult> {
+  const targetDecimals = getCachedDecimals(TARGET_TOKEN_TYPE!)
+  const quoteDecimals = getCachedDecimals(QUOTE_TOKEN_TYPE!)
 
   // Determine input/output tokens and the raw input amount
   let fromCoin: string
@@ -283,7 +367,23 @@ async function executeSwap(
   })
 
   const txBytes = Buffer.from(await tx.build({ client: sui })).toString('base64')
-  return signAndSendTx(txBytes)
+  const digest = await signAndSendTx(txBytes)
+  if (!digest) {
+    // waap-cli returned no digest -- we can't confirm. Treat as failure so the
+    // tick handler logs `rebalance_failed` instead of pretending it worked.
+    throw new Error('waap-cli send-tx returned no digest')
+  }
+
+  // Block until the fullnode reports the tx as executed. If it failed, throw.
+  // On success, read the agent's positive balance change for the output coin
+  // -- that is the real amount received, after slippage and routing.
+  const confirmed = await confirmTx(digest, owner, toCoin)
+  const toDecimals = getCachedDecimals(toCoin)
+  const amountOutHuman = confirmed.amountOutRaw !== null
+    ? Number(confirmed.amountOutRaw) / Math.pow(10, toDecimals)
+    : null
+
+  return { digest, amountOutRaw: confirmed.amountOutRaw, amountOutHuman }
 }
 
 // -----------------------------------------------------------------------------
@@ -296,6 +396,8 @@ interface RebalanceRecord {
   price: number
   amountUsd: number
   txHash: string | null
+  amountOutRaw: string | null
+  amountOutHuman: number | null
 }
 
 const rebalanceHistory: RebalanceRecord[] = []
@@ -315,11 +417,9 @@ async function tick(owner: string): Promise<void> {
     sqrtPrice: pool.currentSqrtPrice,
   })
 
-  // Read current balances
-  const targetDecimals = guessDecimals(TARGET_TOKEN_TYPE!)
-  const quoteDecimals = guessDecimals(QUOTE_TOKEN_TYPE!)
-  const targetBalance = await getTokenBalance(owner, TARGET_TOKEN_TYPE!, targetDecimals)
-  const quoteBalance = await getTokenBalance(owner, QUOTE_TOKEN_TYPE!, quoteDecimals)
+  // Read current balances (decimals come from the startup-loaded cache)
+  const targetBalance = await getTokenBalance(owner, TARGET_TOKEN_TYPE!)
+  const quoteBalance = await getTokenBalance(owner, QUOTE_TOKEN_TYPE!)
   const targetValueUsd = targetBalance * price
 
   logEvent('balance_snapshot', {
@@ -353,20 +453,24 @@ async function tick(owner: string): Promise<void> {
     })
 
     try {
-      const txHash = await executeSwap(owner, pool, 'sell', excessUsd, price)
+      const swap = await executeSwap(owner, pool, 'sell', excessUsd, price)
       const record: RebalanceRecord = {
         timestamp: new Date().toISOString(),
         direction: 'sell',
         price,
         amountUsd: excessUsd,
-        txHash,
+        txHash: swap.digest,
+        amountOutRaw: swap.amountOutRaw?.toString() ?? null,
+        amountOutHuman: swap.amountOutHuman,
       }
       rebalanceHistory.push(record)
 
       logEvent('rebalance_complete', {
         direction: 'sell',
-        txHash,
+        txHash: swap.digest,
         amountUsd: excessUsd.toFixed(2),
+        amountOutRaw: swap.amountOutRaw?.toString() ?? null,
+        amountOutHuman: swap.amountOutHuman?.toFixed(6) ?? null,
         price: price.toFixed(6),
         totalRebalances: rebalanceHistory.length,
       })
@@ -409,20 +513,24 @@ async function tick(owner: string): Promise<void> {
     })
 
     try {
-      const txHash = await executeSwap(owner, pool, 'buy', buyAmountUsd, price)
+      const swap = await executeSwap(owner, pool, 'buy', buyAmountUsd, price)
       const record: RebalanceRecord = {
         timestamp: new Date().toISOString(),
         direction: 'buy',
         price,
         amountUsd: buyAmountUsd,
-        txHash,
+        txHash: swap.digest,
+        amountOutRaw: swap.amountOutRaw?.toString() ?? null,
+        amountOutHuman: swap.amountOutHuman,
       }
       rebalanceHistory.push(record)
 
       logEvent('rebalance_complete', {
         direction: 'buy',
-        txHash,
+        txHash: swap.digest,
         amountUsd: buyAmountUsd.toFixed(2),
+        amountOutRaw: swap.amountOutRaw?.toString() ?? null,
+        amountOutHuman: swap.amountOutHuman?.toFixed(6) ?? null,
         price: price.toFixed(6),
         totalRebalances: rebalanceHistory.length,
       })
@@ -458,11 +566,20 @@ async function main(): Promise<void> {
   const owner = await whoami()
   cetus.senderAddress = owner
 
+  // Preload decimals so the price math and balance reads in the first tick
+  // don't need to round-trip to the fullnode mid-loop.
+  const [targetDecimals, quoteDecimals] = await Promise.all([
+    loadDecimals(TARGET_TOKEN_TYPE!),
+    loadDecimals(QUOTE_TOKEN_TYPE!),
+  ])
+
   logEvent('agent_start', {
     wallet: owner,
     network: NETWORK,
     targetToken: TARGET_TOKEN_TYPE,
+    targetDecimals,
     quoteToken: QUOTE_TOKEN_TYPE,
+    quoteDecimals,
     targetAllocationUsd: TARGET_ALLOCATION_USD,
     highThreshold: HIGH_PRICE_THRESHOLD,
     lowThreshold: LOW_PRICE_THRESHOLD,
